@@ -20,6 +20,16 @@ class DinnerPlannerDB extends Dexie {
       shoppingListItems: 'id, aisle, checked',
       appSettings: 'key',
     });
+    // v2: index isQuickAdd so the Library "Quick add" filter (and the
+    // quick-add-to-day creation flow in MealPickerDialog) can query it
+    // directly. Additive only — no upgrade() needed, existing rows just
+    // read as isQuickAdd: undefined (= not a quick add).
+    this.version(2).stores({
+      meals: 'id, mealType, isKidsMeal, name, isQuickAdd',
+      plannedMeals: 'id, date, mealType, diner, mealId',
+      shoppingListItems: 'id, aisle, checked',
+      appSettings: 'key',
+    });
   }
 }
 

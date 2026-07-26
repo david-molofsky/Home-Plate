@@ -5,14 +5,26 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { MealPickerDialog } from '@/components/planner/MealPickerDialog';
+import { SwapDaysDialog } from '@/components/planner/SwapDaysDialog';
 import type { Diner, MealType, PlannedMeal } from '@/models';
 
 interface DayCardProps {
   date: string; // YYYY-MM-DD
   repeatFlags: Set<string>;
+  /** The dates this day can be swapped with — normally the current
+   * visible week. Passed down so SwapDaysDialog doesn't need to
+   * recompute the week range itself. */
+  weekDays: string[];
 }
 
 interface Slot {
@@ -20,10 +32,12 @@ interface Slot {
   diner: Diner;
 }
 
-export function DayCard({ date, repeatFlags }: DayCardProps) {
+export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
   const [pickerSlot, setPickerSlot] = useState<Slot | null>(null);
   const [showBreakfast, setShowBreakfast] = useState(false);
   const [showLunch, setShowLunch] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [swapOpen, setSwapOpen] = useState(false);
 
   const planned = useLiveQuery(
     () => db.plannedMeals.where('date').equals(date).toArray(),
@@ -84,9 +98,32 @@ export function DayCard({ date, repeatFlags }: DayCardProps) {
         mb: 1,
       }}
     >
-      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
-        {dayjs(date).format('dddd D MMM')}
-      </Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+          {dayjs(date).format('dddd D MMM')}
+        </Typography>
+        <IconButton
+          size="small"
+          onClick={(e) => setMenuAnchor(e.currentTarget)}
+          aria-label="Day options"
+        >
+          <MoreVertIcon fontSize="small" />
+        </IconButton>
+      </Stack>
+
+      <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+        <MenuItem
+          onClick={() => {
+            setMenuAnchor(null);
+            setSwapOpen(true);
+          }}
+        >
+          <ListItemIcon>
+            <SwapHorizIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Swap dinner with…</ListItemText>
+        </MenuItem>
+      </Menu>
 
       {(breakfast || showBreakfast) && renderSlotRow('Breakfast', breakfast, 'breakfast', 'adult')}
       {(lunch || showLunch) && renderSlotRow('Lunch', lunch, 'lunch', 'adult')}
@@ -162,6 +199,15 @@ export function DayCard({ date, repeatFlags }: DayCardProps) {
           date={date}
           mealType={pickerSlot.mealType}
           diner={pickerSlot.diner}
+        />
+      )}
+
+      {swapOpen && (
+        <SwapDaysDialog
+          open
+          onClose={() => setSwapOpen(false)}
+          sourceDate={date}
+          weekDays={weekDays}
         />
       )}
     </Box>

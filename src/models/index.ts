@@ -48,6 +48,12 @@ export interface Meal {
   steps: RecipeStep[];
   notes?: string;
   wouldMakeAgain?: boolean;
+  /** True when this meal was created via the "quick add to day" flow
+   * (typed straight into a planner slot) rather than the full Add Meal
+   * form. Surfaced as a filter in the Library so it can be found and
+   * finished later; cleared by the person from the Edit Meal page once
+   * they're happy with it. */
+  isQuickAdd?: boolean;
   createdAt: string; // ISO
   updatedAt: string; // ISO
 }

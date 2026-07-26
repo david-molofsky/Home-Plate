@@ -17,9 +17,13 @@ const TYPE_FILTERS: (MealType | 'all')[] = ['all', 'breakfast', 'lunch', 'dinner
 export function LibraryPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<MealType | 'all'>('all');
+  const [quickOnly, setQuickOnly] = useState(false);
 
   const meals = useLiveQuery(() => db.meals.orderBy('name').toArray(), []);
-  const filtered = (meals ?? []).filter((m) => filter === 'all' || m.mealType === filter);
+  const quickAddCount = (meals ?? []).filter((m) => m.isQuickAdd).length;
+  const filtered = (meals ?? []).filter(
+    (m) => (filter === 'all' || m.mealType === filter) && (!quickOnly || m.isQuickAdd),
+  );
 
   return (
     <Box>
@@ -38,6 +42,13 @@ export function LibraryPage() {
             onClick={() => setFilter(t)}
           />
         ))}
+        {quickAddCount > 0 && (
+          <Chip
+            label={`Quick add (${quickAddCount})`}
+            color={quickOnly ? 'secondary' : 'default'}
+            onClick={() => setQuickOnly((v) => !v)}
+          />
+        )}
       </Stack>
 
       <Button variant="contained" onClick={() => navigate(ROUTES.addMeal)} sx={{ mb: 2 }}>
@@ -58,6 +69,7 @@ export function LibraryPage() {
                   <Chip size="small" label={meal.mealType} />
                 </Stack>
                 <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                  {meal.isQuickAdd && <Chip size="small" color="secondary" label="quick add" />}
                   {meal.isKidsMeal && <Chip size="small" color="secondary" label="kids" />}
                   {meal.effort && <Chip size="small" label={meal.effort} />}
                   {meal.size && <Chip size="small" label={meal.size} />}

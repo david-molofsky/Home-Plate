@@ -92,9 +92,19 @@ export function EditMealPage() {
 
   return (
     <Box>
-      <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
-        {isNew ? 'Add Meal' : 'Edit Meal'}
-      </Typography>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <Typography variant="h6" fontWeight={700}>
+          {isNew ? 'Add Meal' : 'Edit Meal'}
+        </Typography>
+        {meal.isQuickAdd && (
+          <Chip
+            size="small"
+            color="secondary"
+            label="Quick add — tap to clear"
+            onClick={() => setMeal({ ...meal, isQuickAdd: false })}
+          />
+        )}
+      </Stack>
 
       <Stack spacing={2}>
         <TextField

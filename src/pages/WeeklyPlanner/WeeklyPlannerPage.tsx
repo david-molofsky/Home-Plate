@@ -72,7 +72,7 @@ export function WeeklyPlannerPage() {
       )}
 
       {days.map((date) => (
-        <DayCard key={date} date={date} repeatFlags={repeatFlags} />
+        <DayCard key={date} date={date} repeatFlags={repeatFlags} weekDays={days} />
       ))}
     </Box>
   );

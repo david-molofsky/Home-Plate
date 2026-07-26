@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
-import type { Aisle, Meal, PlannedMeal, ShoppingListItem } from '@/models';
+import type { Aisle, Diner, Meal, PlannedMeal, ShoppingListItem } from '@/models';
 
 /**
  * Flags dinners that repeat within any rolling 7-day window — not
@@ -115,6 +115,81 @@ export function groupByAisle(items: ShoppingListItem[]): Record<Aisle, ShoppingL
     grouped[item.aisle].push(item);
   }
   return grouped;
+}
+
+/** Checks whether assigning `mealId` to `diner` on `date` would land
+ * within 7 days of another dinner planning of the same meal+diner —
+ * used by the quick-add flow (to warn before assigning an existing
+ * Library meal) and by the day-swap preview (to warn before committing
+ * a swap). `excludeEntryIds` lets callers exclude specific PlannedMeal
+ * rows from the check — e.g. the two rows involved in a swap, so they
+ * don't conflict against their own old value. Returns the nearest
+ * conflicting date, or null if there's no conflict. */
+export async function checkRepeatConflict(
+  date: string,
+  diner: Diner,
+  mealId: string,
+  excludeEntryIds: string[] = [],
+): Promise<string | null> {
+  const start = dayjs(date).subtract(6, 'day').format('YYYY-MM-DD');
+  const end = dayjs(date).add(6, 'day').format('YYYY-MM-DD');
+  const nearby = await db.plannedMeals
+    .where('date')
+    .between(start, end, true, true)
+    .and(
+      (p) =>
+        p.mealType === 'dinner' &&
+        p.diner === diner &&
+        p.mealId === mealId &&
+        p.date !== date &&
+        !excludeEntryIds.includes(p.id),
+    )
+    .toArray();
+
+  if (nearby.length === 0) return null;
+
+  nearby.sort(
+    (a, b) =>
+      Math.abs(dayjs(a.date).diff(dayjs(date), 'day')) -
+      Math.abs(dayjs(b.date).diff(dayjs(date), 'day')),
+  );
+  return nearby[0].date;
+}
+
+async function findDinnerEntry(date: string, diner: Diner): Promise<PlannedMeal | undefined> {
+  const rows = await db.plannedMeals.where('date').equals(date).toArray();
+  return rows.find((p) => p.mealType === 'dinner' && p.diner === diner);
+}
+
+/** Swaps dinner between two dates — adult and kids independently.
+ * Breakfast/lunch are untouched (per product decision: swap is
+ * dinner-only). Handles the case where only one side has a dinner
+ * planned by moving that entry to the other date rather than leaving
+ * a stray empty row behind. */
+export async function swapDinners(dateA: string, dateB: string): Promise<void> {
+  await db.transaction('rw', db.plannedMeals, async () => {
+    const diners: Diner[] = ['adult', 'kids'];
+    for (const diner of diners) {
+      const entryA = await findDinnerEntry(dateA, diner);
+      const entryB = await findDinnerEntry(dateB, diner);
+
+      if (entryA && entryB) {
+        await db.plannedMeals.update(entryA.id, {
+          mealId: entryB.mealId,
+          isLeftovers: entryB.isLeftovers ?? false,
+        });
+        await db.plannedMeals.update(entryB.id, {
+          mealId: entryA.mealId,
+          isLeftovers: entryA.isLeftovers ?? false,
+        });
+      } else if (entryA && !entryB) {
+        await db.plannedMeals.update(entryA.id, { date: dateB });
+      } else if (!entryA && entryB) {
+        await db.plannedMeals.update(entryB.id, { date: dateA });
+      }
+      // neither exists — nothing to swap for this diner
+    }
+  });
 }
 
 /** "Last made" + frequency stats for a meal, based on PlannedMeal rows
