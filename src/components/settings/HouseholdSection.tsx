@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
@@ -20,13 +21,19 @@ function generateCode(): string {
  * it (per product decision: no individual logins, sync via Drive).
  */
 export function HouseholdSection() {
-  const code = useLiveQuery(async () => {
-    const record = await db.appSettings.get(KEY);
-    if (record) return record.value as string;
-    const generated = generateCode();
-    await db.appSettings.put({ key: KEY, value: generated });
-    return generated;
-  }, []);
+  // Read-only: liveQuery's querier must never write to the database.
+  // Resolves to: undefined (still loading) | null (no record yet) | record.
+  const record = useLiveQuery(async () => (await db.appSettings.get(KEY)) ?? null, []);
+
+  // Generate + persist a code once, outside the reactive read-only context.
+  useEffect(() => {
+    if (record === undefined) return; // still loading
+    if (record === null) {
+      void db.appSettings.put({ key: KEY, value: generateCode() });
+    }
+  }, [record]);
+
+  const code = record?.value as string | undefined;
 
   return (
     <CollapsibleSection title="Household" icon={GroupsOutlinedIcon}>
