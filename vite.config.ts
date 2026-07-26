@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
-        name: 'Dinner Planner',
-        short_name: 'Dinner',
+        name: 'Home Plate',
+        short_name: 'Home Plate',
         description: 'Plan meals, dodge repeats, and build the shopping list automatically.',
         theme_color: '#121212',
         background_color: '#121212',

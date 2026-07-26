@@ -15,7 +15,7 @@ import { db } from '@/services/database/db';
  */
 
 const TOKEN_KEY = 'googleDriveToken';
-const FOLDER_NAME = 'Dinner Planner';
+const FOLDER_NAME = 'Home Plate';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
@@ -128,7 +128,7 @@ export async function exportToGoogleDrive(): Promise<string> {
     2,
   );
 
-  const fileName = `dinner-planner-${new Date().toISOString().slice(0, 10)}.json`;
+  const fileName = `home-plate-${new Date().toISOString().slice(0, 10)}.json`;
 
   // Overwrite today's export if it already exists.
   const query = encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`);

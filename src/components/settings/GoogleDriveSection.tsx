@@ -39,7 +39,7 @@ const TOKEN_KEY = 'googleDriveToken';
 /**
  * Google Drive section in Settings — adapted from Media Journal.
  * Handles connect/disconnect (GIS OAuth2), export/import to a
- * "Dinner Planner" Drive folder, and the automatic daily backup toggle.
+ * "Home Plate" Drive folder, and the automatic daily backup toggle.
  * `drive.file` scope means this app can only see files it created.
  */
 export function GoogleDriveSection() {
@@ -92,7 +92,7 @@ export function GoogleDriveSection() {
   const handleExport = () =>
     run(async () => {
       const fileName = await exportToGoogleDrive();
-      setStatus({ type: 'success', message: `Saved as "${fileName}" in your Dinner Planner Drive folder.` });
+      setStatus({ type: 'success', message: `Saved as "${fileName}" in your Home Plate Drive folder.` });
     });
 
   const handleOpenImport = async () => {
@@ -136,7 +136,7 @@ export function GoogleDriveSection() {
       ) : (
         <>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Your meal library and plan are saved to a <strong>Dinner Planner</strong> folder in
+            Your meal library and plan are saved to a <strong>Home Plate</strong> folder in
             your Drive. Exporting today overwrites any previous export from today.
           </Typography>
           <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
@@ -200,7 +200,7 @@ export function GoogleDriveSection() {
             </Box>
           ) : driveFiles.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-              No Dinner Planner exports found in your Drive.
+              No Home Plate exports found in your Drive.
             </Typography>
           ) : (
             <List disablePadding>

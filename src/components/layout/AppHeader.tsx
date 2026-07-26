@@ -18,7 +18,7 @@ export function AppHeader() {
     <AppBar position="sticky" color="default" sx={{ borderBottom: 1, borderColor: 'divider' }}>
       <Toolbar>
         <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontWeight: 700 }}>
-          Dinner Planner
+          Home Plate
         </Typography>
         <IconButton aria-label="Open settings" onClick={() => navigate(ROUTES.settings)}>
           <SettingsOutlinedIcon />

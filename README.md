@@ -1,4 +1,4 @@
-# Dinner Planner
+# Home Plate
 
 A household meal-planning PWA: set dietary preferences, tag meals by effort/size, plan
 breakfast/lunch/dinner (dinner split into separate adult and kids meals), get warned when a
@@ -44,7 +44,7 @@ build's environment — the client ID itself isn't secret (it's visible in any O
 so it's fine to include in your deployed site's build config.
 
 Household members don't need separate Google accounts tied to each other — anyone can connect
-their own Drive, export, and others import the file from the shared **Dinner Planner** folder.
+their own Drive, export, and others import the file from the shared **Home Plate** folder.
 There's no login system in the app itself; the household code in Settings is just a shared
 label to keep everyone's exports recognizable, not an auth mechanism.
 
@@ -54,7 +54,7 @@ label to keep everyone's exports recognizable, not an auth mechanism.
 2. Deploy with GitHub Pages (or any static host — Netlify/Vercel work too):
    - `npm run build` produces a static `dist/` folder.
    - For GitHub Pages specifically, you'll want to set `base` in `vite.config.ts` to your repo
-     name (e.g. `base: '/dinner-planner/'`) and use a deploy action or `gh-pages` package.
+     name (e.g. `base: '/home-plate/'`) and use a deploy action or `gh-pages` package.
 3. Once deployed over HTTPS, the app is installable as a PWA (Add to Home Screen) on mobile
    and desktop.
 4. Add your production URL to the OAuth client's **Authorized JavaScript origins** (step 3
