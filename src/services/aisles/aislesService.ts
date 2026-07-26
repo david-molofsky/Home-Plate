@@ -3,16 +3,18 @@ import { newId } from '@/utils/id';
 import { DEFAULT_AISLES, SETTINGS_KEYS } from '@/models';
 import type { AisleConfig } from '@/models';
 
-/** Reads the household's aisle list, seeding DEFAULT_AISLES the first
- * time (no aisles saved yet). Order in the returned array is the
- * display/grouping order — see reorderAisles. Safe to call from
- * useLiveQuery: reads (and, on first run only, writes) db.appSettings,
- * so it stays reactive to changes made elsewhere in this file. */
+/** Reads the household's aisle list, falling back to DEFAULT_AISLES
+ * in memory if nothing's been saved yet. Order in the returned array
+ * is the display/grouping order — see reorderAisles. Read-only (no
+ * writes), so it's safe to call from useLiveQuery: a liveQuery querier
+ * must never open a readwrite transaction, or Dexie throws
+ * ReadOnlyError and the component tree blanks out. The default list
+ * only gets persisted once the household actually changes it (add/
+ * toggle/reorder, below), which is fine — callers always get a valid
+ * list either way. */
 export async function getAisleConfig(): Promise<AisleConfig[]> {
   const record = await db.appSettings.get(SETTINGS_KEYS.aisles);
-  if (record?.value) return record.value as AisleConfig[];
-  await db.appSettings.put({ key: SETTINGS_KEYS.aisles, value: DEFAULT_AISLES });
-  return DEFAULT_AISLES;
+  return (record?.value as AisleConfig[] | undefined) ?? DEFAULT_AISLES;
 }
 
 async function saveAisleConfig(config: AisleConfig[]): Promise<void> {
