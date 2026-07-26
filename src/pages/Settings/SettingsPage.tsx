@@ -3,6 +3,7 @@ import Typography from '@mui/material/Typography';
 import { HouseholdSection } from '@/components/settings/HouseholdSection';
 import { GoogleDriveSection } from '@/components/settings/GoogleDriveSection';
 import { DietaryDefaultsSection } from '@/components/settings/DietaryDefaultsSection';
+import { GroceryAislesSection } from '@/components/settings/GroceryAislesSection';
 
 export function SettingsPage() {
   return (
@@ -13,6 +14,7 @@ export function SettingsPage() {
       <HouseholdSection />
       <GoogleDriveSection />
       <DietaryDefaultsSection />
+      <GroceryAislesSection />
     </Box>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
@@ -9,14 +10,26 @@ import Button from '@mui/material/Button';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { generateShoppingList, groupByAisle } from '@/services/mealPlan/mealPlanService';
-import { AISLES } from '@/models';
+import { getAisleConfig } from '@/services/aisles/aislesService';
 import type { ShoppingListItem } from '@/models';
 import { newId } from '@/utils/id';
 
 export function ShoppingListPage() {
   const [items, setItems] = useState<ShoppingListItem[]>([]);
   const [manualName, setManualName] = useState('');
-  const [manualAisle, setManualAisle] = useState<ShoppingListItem['aisle']>('produce');
+  const [manualAisle, setManualAisle] = useState<string | null>(null);
+
+  const aisleConfig = useLiveQuery(() => getAisleConfig(), []);
+  const visibleAisleOptions = (aisleConfig ?? []).filter((a) => !a.hidden);
+
+  // Default the manual-add aisle to the first visible one once config
+  // has loaded (can't know it synchronously on first render).
+  useEffect(() => {
+    if (manualAisle === null && visibleAisleOptions.length > 0) {
+      setManualAisle(visibleAisleOptions[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aisleConfig]);
 
   const weekStart = dayjs().startOf('week').format('YYYY-MM-DD');
   const weekEnd = dayjs().endOf('week').format('YYYY-MM-DD');
@@ -38,7 +51,7 @@ export function ShoppingListPage() {
   };
 
   const addManualItem = async () => {
-    if (!manualName.trim()) return;
+    if (!manualName.trim() || !manualAisle) return;
     const item: ShoppingListItem = {
       id: newId(),
       name: manualName,
@@ -54,6 +67,18 @@ export function ShoppingListPage() {
 
   const grouped = groupByAisle(items);
 
+  // Display order follows the household's configured aisle order (drag
+  // order in Settings), not alphabetical. Any aisle id present on an
+  // item but no longer in the config (shouldn't normally happen, since
+  // hiding never deletes) is appended at the end rather than dropped,
+  // so nothing silently disappears from the list.
+  const orderedAisleIds = [
+    ...(aisleConfig ?? []).map((a) => a.id),
+    ...Object.keys(grouped).filter((id) => !(aisleConfig ?? []).some((a) => a.id === id)),
+  ];
+
+  const aisleLabel = (id: string) => (aisleConfig ?? []).find((a) => a.id === id)?.name ?? id;
+
   return (
     <Box>
       <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
@@ -63,13 +88,13 @@ export function ShoppingListPage() {
         Auto-built from this week's planned meals.
       </Typography>
 
-      {AISLES.map((aisle) => {
-        const aisleItems = grouped[aisle];
+      {orderedAisleIds.map((aisleId) => {
+        const aisleItems = grouped[aisleId];
         if (!aisleItems || aisleItems.length === 0) return null;
         return (
-          <Box key={aisle} sx={{ mb: 1.5 }}>
+          <Box key={aisleId} sx={{ mb: 1.5 }}>
             <Typography variant="subtitle2" color="primary.light" fontWeight={700} sx={{ mb: 0.5 }}>
-              {aisle[0].toUpperCase() + aisle.slice(1)}
+              {aisleLabel(aisleId)}
             </Typography>
             <Stack>
               {aisleItems.map((item) => (
@@ -104,13 +129,13 @@ export function ShoppingListPage() {
         <TextField
           select
           size="small"
-          value={manualAisle}
-          onChange={(e) => setManualAisle(e.target.value as ShoppingListItem['aisle'])}
+          value={manualAisle ?? ''}
+          onChange={(e) => setManualAisle(e.target.value)}
           sx={{ flex: 1 }}
         >
-          {AISLES.map((a) => (
-            <MenuItem key={a} value={a}>
-              {a}
+          {visibleAisleOptions.map((a) => (
+            <MenuItem key={a.id} value={a.id}>
+              {a.name}
             </MenuItem>
           ))}
         </TextField>

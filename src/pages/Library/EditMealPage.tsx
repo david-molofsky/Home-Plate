@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
@@ -14,7 +15,7 @@ import Divider from '@mui/material/Divider';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { db } from '@/services/database/db';
 import { newId } from '@/utils/id';
-import { AISLES } from '@/models';
+import { getAisleConfig } from '@/services/aisles/aislesService';
 import type { DietaryTag, EffortTag, Ingredient, Meal, MealType, RecipeStep, SizeTag } from '@/models';
 import { ROUTES } from '@/routes/paths';
 
@@ -44,6 +45,10 @@ export function EditMealPage() {
   const [meal, setMeal] = useState<Meal>(emptyMeal());
   const isNew = !mealId;
 
+  const aisleConfig = useLiveQuery(() => getAisleConfig(), []);
+  const visibleAisleOptions = (aisleConfig ?? []).filter((a) => !a.hidden);
+  const defaultAisleId = visibleAisleOptions[0]?.id ?? 'other';
+
   useEffect(() => {
     if (mealId) {
       void db.meals.get(mealId).then((m) => m && setMeal(m));
@@ -57,7 +62,7 @@ export function EditMealPage() {
   };
 
   const addIngredient = () => {
-    const ing: Ingredient = { id: newId(), name: '', quantity: '', aisle: 'produce' };
+    const ing: Ingredient = { id: newId(), name: '', quantity: '', aisle: defaultAisleId };
     setMeal({ ...meal, ingredients: [...meal.ingredients, ing] });
   };
   const updateIngredient = (id: string, patch: Partial<Ingredient>) => {
@@ -227,14 +232,17 @@ export function EditMealPage() {
                   select
                   size="small"
                   value={ing.aisle}
-                  onChange={(e) => updateIngredient(ing.id, { aisle: e.target.value as Ingredient['aisle'] })}
+                  onChange={(e) => updateIngredient(ing.id, { aisle: e.target.value })}
                   sx={{ flex: 1.5 }}
                 >
-                  {AISLES.map((a) => (
-                    <MenuItem key={a} value={a}>
-                      {a}
-                    </MenuItem>
-                  ))}
+                  {(aisleConfig ?? [])
+                    .filter((a) => !a.hidden || a.id === ing.aisle)
+                    .map((a) => (
+                      <MenuItem key={a.id} value={a.id}>
+                        {a.name}
+                        {a.hidden ? ' (hidden)' : ''}
+                      </MenuItem>
+                    ))}
                 </TextField>
                 <IconButton size="small" onClick={() => removeIngredient(ing.id)}>
                   <DeleteOutlineIcon fontSize="small" />

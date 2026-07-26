@@ -11,16 +11,36 @@ export type EffortTag = 'easy' | 'time-consuming';
 export type SizeTag = 'small' | 'big';
 export type DietaryTag = 'vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free' | 'none';
 
-export const AISLES = [
-  'produce',
-  'dairy',
-  'meat',
-  'bakery',
-  'pantry',
-  'frozen',
-  'other',
-] as const;
-export type Aisle = (typeof AISLES)[number];
+/**
+ * Aisles used to be a fixed union type. They're now a household-editable,
+ * ordered list (see services/aisles/aislesService) so people can hide
+ * ones they don't use and add their own (e.g. "Household"). `Aisle` is
+ * just the id of an AisleConfig entry — kept as its own type alias so
+ * existing call sites (Ingredient.aisle, ShoppingListItem.aisle) don't
+ * need to change shape, only what populates them.
+ */
+export type Aisle = string;
+
+export interface AisleConfig {
+  id: string;
+  name: string;
+  hidden: boolean;
+}
+
+/** Seed list — ids intentionally match the previous fixed union values
+ * so ingredients/shopping items created before this change keep
+ * resolving correctly. Only used the first time a household has no
+ * aisles saved yet; after that, the household's own list in appSettings
+ * is the source of truth. */
+export const DEFAULT_AISLES: AisleConfig[] = [
+  { id: 'produce', name: 'Produce', hidden: false },
+  { id: 'dairy', name: 'Dairy', hidden: false },
+  { id: 'meat', name: 'Meat', hidden: false },
+  { id: 'bakery', name: 'Bakery', hidden: false },
+  { id: 'pantry', name: 'Pantry', hidden: false },
+  { id: 'frozen', name: 'Frozen', hidden: false },
+  { id: 'other', name: 'Other', hidden: false },
+];
 
 export interface Ingredient {
   id: string;
@@ -86,6 +106,7 @@ export const SETTINGS_KEYS = {
   dietaryDefaults: 'dietaryDefaults',
   autoBackupEnabled: 'autoBackupEnabled',
   lastAutoBackupAt: 'lastAutoBackupAt',
+  aisles: 'aislesConfig',
 } as const;
 
 export interface AppSettingsRecord {

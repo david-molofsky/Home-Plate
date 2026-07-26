@@ -96,7 +96,7 @@ export async function generateShoppingList(
     aggregated.set(item.id, item);
   }
 
-  return [...aggregated.values()].sort((a, b) => a.aisle.localeCompare(b.aisle));
+  return [...aggregated.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function combineQuantities(a: string, b: string): string {
