@@ -14,7 +14,7 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter>
+      <BrowserRouter basename="/Home-Plate/">
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<WeeklyPlannerPage />} />
