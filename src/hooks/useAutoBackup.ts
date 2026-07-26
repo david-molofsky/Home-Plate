@@ -2,22 +2,23 @@ import { useEffect } from 'react';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { exportToGoogleDrive } from '@/services/googleDrive/googleDriveService';
-import { SETTINGS_KEYS } from '@/models';
+import { DEVICE_SETTINGS_KEYS } from '@/models';
 
 /**
  * Watches for the daily 23:59 auto-backup window (per Settings' auto
  * backup toggle). Checks every 5 minutes while the app is open, plus
  * once on load in case it's opened after 23:59 with no backup yet
  * today — matches Media Journal's "runs at 23:59 or as soon as it's
- * next opened" behaviour.
+ * next opened" behaviour. Reads/writes deviceSettings (not appSettings)
+ * since this preference is deliberately per-device, not synced.
  */
 export function useAutoBackup() {
   useEffect(() => {
     const check = async () => {
-      const enabledRecord = await db.appSettings.get(SETTINGS_KEYS.autoBackupEnabled);
+      const enabledRecord = await db.deviceSettings.get(DEVICE_SETTINGS_KEYS.autoBackupEnabled);
       if (!enabledRecord?.value) return;
 
-      const lastRecord = await db.appSettings.get(SETTINGS_KEYS.lastAutoBackupAt);
+      const lastRecord = await db.deviceSettings.get(DEVICE_SETTINGS_KEYS.lastAutoBackupAt);
       const lastRun = lastRecord?.value as string | undefined;
       const today = dayjs().format('YYYY-MM-DD');
       const alreadyRanToday = lastRun && dayjs(lastRun).format('YYYY-MM-DD') === today;
@@ -29,7 +30,7 @@ export function useAutoBackup() {
 
       try {
         await exportToGoogleDrive();
-        await db.appSettings.put({ key: SETTINGS_KEYS.lastAutoBackupAt, value: new Date().toISOString() });
+        await db.deviceSettings.put({ key: DEVICE_SETTINGS_KEYS.lastAutoBackupAt, value: new Date().toISOString() });
       } catch {
         // Silent — user will notice via "last backup" timestamp in Settings.
       }

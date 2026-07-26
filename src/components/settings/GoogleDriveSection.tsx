@@ -32,7 +32,7 @@ import {
 } from '@/services/googleDrive/googleDriveService';
 import { db } from '@/services/database/db';
 import { useBooleanSetting } from '@/hooks/useBooleanSetting';
-import { SETTINGS_KEYS } from '@/models';
+import { DEVICE_SETTINGS_KEYS } from '@/models';
 
 const TOKEN_KEY = 'googleDriveToken';
 
@@ -44,7 +44,7 @@ const TOKEN_KEY = 'googleDriveToken';
  */
 export function GoogleDriveSection() {
   const connected = useLiveQuery(async () => {
-    const record = await db.appSettings.get(TOKEN_KEY);
+    const record = await db.deviceSettings.get(TOKEN_KEY);
     return record !== undefined;
   }, []);
 
@@ -55,12 +55,13 @@ export function GoogleDriveSection() {
   const [loadingFiles, setLoadingFiles] = useState(false);
 
   const [autoBackupEnabled, setAutoBackupEnabled] = useBooleanSetting(
-    SETTINGS_KEYS.autoBackupEnabled,
+    DEVICE_SETTINGS_KEYS.autoBackupEnabled,
     false,
+    'deviceSettings',
   );
   const [autoBackupConfirmOpen, setAutoBackupConfirmOpen] = useState(false);
   const lastAutoBackupAt = useLiveQuery(async () => {
-    const record = await db.appSettings.get(SETTINGS_KEYS.lastAutoBackupAt);
+    const record = await db.deviceSettings.get(DEVICE_SETTINGS_KEYS.lastAutoBackupAt);
     return (record?.value as string) ?? null;
   }, []);
 
@@ -126,8 +127,10 @@ export function GoogleDriveSection() {
       {!connected ? (
         <>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Connect Google Drive to export and import your household's meal library and plan
-            directly — no manual file downloads needed. Only files this app creates are accessible.
+            Household sync now runs through your account (see Household above). Connecting
+            Google Drive here adds an extra backup you control directly — export/import a
+            snapshot any time, independent of that sync. Only files this app creates are
+            accessible.
           </Typography>
           <Button variant="outlined" startIcon={<GoogleIcon />} onClick={handleConnect} disabled={busy}>
             Connect to Google Drive

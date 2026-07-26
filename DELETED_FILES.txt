@@ -1,0 +1,1 @@
+DELETED_FILE: src/components/settings/HouseholdSection.tsx (removed, replaced by HouseholdSyncSection.tsx)

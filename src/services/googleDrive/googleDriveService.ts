@@ -55,7 +55,7 @@ function loadGisScript(): Promise<void> {
 }
 
 async function getToken(): Promise<string> {
-  const record = await db.appSettings.get(TOKEN_KEY);
+  const record = await db.deviceSettings.get(TOKEN_KEY);
   if (!record) throw new Error('Not connected to Google Drive.');
   return record.value as string;
 }
@@ -76,7 +76,7 @@ export async function signInToDrive(): Promise<void> {
           reject(new Error(resp.error ?? 'Sign-in failed.'));
           return;
         }
-        await db.appSettings.put({ key: TOKEN_KEY, value: resp.access_token });
+        await db.deviceSettings.put({ key: TOKEN_KEY, value: resp.access_token });
         resolve();
       },
     });
@@ -85,7 +85,7 @@ export async function signInToDrive(): Promise<void> {
 }
 
 export async function signOutOfDrive(): Promise<void> {
-  await db.appSettings.delete(TOKEN_KEY);
+  await db.deviceSettings.delete(TOKEN_KEY);
 }
 
 async function findOrCreateFolder(token: string): Promise<string> {

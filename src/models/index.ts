@@ -76,6 +76,8 @@ export interface Meal {
   isQuickAdd?: boolean;
   createdAt: string; // ISO
   updatedAt: string; // ISO
+  /** Present once household sync is set up — see services/householdSync. */
+  realmId?: string;
 }
 
 /** A single meal assigned to a specific date. For dinner, two entries
@@ -89,6 +91,8 @@ export interface PlannedMeal {
   mealId: string;
   isLeftovers?: boolean; // e.g. "Leftover Tacos" sourced from a prior day
   madeAt?: string; // ISO — set when marked as actually made, feeds "last made" stats
+  /** Present once household sync is set up — see services/householdSync. */
+  realmId?: string;
 }
 
 export interface ShoppingListItem {
@@ -98,18 +102,34 @@ export interface ShoppingListItem {
   aisle: Aisle;
   checked: boolean;
   manual: boolean; // true if added manually rather than derived from planned meals
+  /** Present once household sync is set up — see services/householdSync. */
+  realmId?: string;
 }
 
+/** Shared household settings — stored in appSettings, which syncs via
+ * the household's Dexie Cloud realm once sync is set up (see
+ * services/householdSync). */
 export const SETTINGS_KEYS = {
-  householdCode: 'householdCode',
   colorMode: 'colorMode',
   dietaryDefaults: 'dietaryDefaults',
+  aisles: 'aislesConfig',
+} as const;
+
+/** Device-local settings — stored in deviceSettings, which is excluded
+ * from Dexie Cloud sync (see db.ts's `unsyncedTables`). These are
+ * inherently per-device: a Drive OAuth token belongs to whichever
+ * Google account this device connected, and auto-backup is deliberately
+ * meant to run on one device only. */
+export const DEVICE_SETTINGS_KEYS = {
+  googleDriveToken: 'googleDriveToken',
   autoBackupEnabled: 'autoBackupEnabled',
   lastAutoBackupAt: 'lastAutoBackupAt',
-  aisles: 'aislesConfig',
 } as const;
 
 export interface AppSettingsRecord {
   key: string;
   value: unknown;
+  /** Present once household sync is set up — see services/householdSync.
+   * Absent (or the user's private realm) means this row is local-only. */
+  realmId?: string;
 }
