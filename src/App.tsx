@@ -1,6 +1,6 @@
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { theme } from '@/theme/theme';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { WeeklyPlannerPage } from '@/pages/WeeklyPlanner/WeeklyPlannerPage';
@@ -14,7 +14,7 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter basename="/Home-Plate/">
+      <HashRouter>
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<WeeklyPlannerPage />} />
@@ -26,7 +26,7 @@ export default function App() {
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </ThemeProvider>
   );
 }
