@@ -3,9 +3,9 @@
 A household meal-planning PWA: set dietary preferences, tag meals by effort/size, plan
 breakfast/lunch/dinner (dinner split into separate adult and kids meals), get warned when a
 dinner repeats within any 7-day window, browse a 6-week-back/3-month-ahead calendar, and
-auto-generate a shopping list grouped by aisle. Syncs between household members in real time
-via Dexie Cloud (email sign-in, no passwords), with Google Drive export/import kept as an
-optional manual backup on top.
+auto-generate a shopping list grouped by aisle. No backend and no individual accounts —
+household members stay in sync by exporting/importing the same file via Google Drive, and
+recognize each other via a shared household code shown in Settings.
 
 Built with the same stack as Media Journal: Vite + React + TypeScript + MUI + Dexie
 (IndexedDB) + react-router-dom.
@@ -17,31 +17,10 @@ npm install
 npm run dev
 ```
 
-Data is stored locally in IndexedDB via Dexie — nothing leaves the device until you sign in
-for household sync (or connect Google Drive) in Settings.
+Data is stored locally in IndexedDB via Dexie — nothing leaves the device until you connect
+Google Drive in Settings.
 
-## Dexie Cloud setup (required for household sync)
-
-1. Run `npx dexie-cloud create` in the project root — this provisions a free Dexie Cloud
-   database and prints a database URL (`https://<your-db>.dexie.cloud`).
-2. Create a `.env` file in the project root (copy `.env.example`) and set:
-   ```
-   VITE_DEXIE_CLOUD_URL=https://your-db.dexie.cloud
-   ```
-3. Restart `npm run dev` after adding the `.env` file.
-
-That's it — no further dashboard config is needed for the free tier (3 users, 100MB, which
-comfortably covers a household). In Settings → Household, sign in with your email (a one-time
-code is emailed to you, no password), tap **Set up household sync** to create your household's
-shared space, then **Invite** your household by email. Once they accept, both devices sync
-live and Home Plate works fully offline in between — changes queue locally and sync when back
-online.
-
-The database URL isn't secret (it only allows email/OTP sign-in against your own database), so
-it's fine to bake into your deployed build's environment, the same as the Google Drive client
-ID below.
-
-## Google Drive setup (optional backup)
+## Google Drive setup (required for household sync)
 
 The app uses Google Identity Services with the narrow `drive.file` scope — it can only see
 files it creates itself, never anything else in your Drive.
@@ -65,10 +44,12 @@ Each household member repeats step 5 locally, or you bake the client ID into you
 build's environment — the client ID itself isn't secret (it's visible in any OAuth web app),
 so it's fine to include in your deployed site's build config.
 
-This is independent of household sync above — each person who wants a manual/automatic backup
-connects their own Drive account and exports to their own **Home Plate** Drive folder. It's not
-how household members share data with each other any more (that's Dexie Cloud); it's a personal
-safety net.
+To share a plan: one person connects Drive and exports; other household members connect their
+own Drive account and use **Import from Drive** to pull that same file in. The household code
+shown in Settings → Household is just a shared label so everyone recognizes the same export —
+there's no account or server behind it. Repeat the export/import whenever the plan changes;
+the optional automatic daily backup (also in Settings) makes this easier by keeping one
+device's export always current.
 
 ## Deploying as a PWA via GitHub
 
@@ -89,15 +70,14 @@ src/
   theme/            MUI theme (pinky-purple palette, violet button/toggle accent)
   models/           Shared TypeScript types
   services/
-    database/       Dexie schema + Dexie Cloud config, household realm cache
-    householdSync/  Dexie Cloud login, household realm setup, invites
+    database/       Dexie schema
     mealPlan/       Repeat-check logic, shopping list generation, meal stats
-    googleDrive/    Drive OAuth + export/import (manual backup, not primary sync)
-  hooks/            useAutoBackup, useBooleanSetting, useHouseholdRealm
+    googleDrive/    Drive OAuth + export/import (the household sync mechanism)
+  hooks/            useAutoBackup, useBooleanSetting
   components/
     layout/         AppHeader (title + settings gear), BottomNav, AppLayout
     planner/        DayCard, MealPickerDialog
-    settings/       CollapsibleSection, HouseholdSyncSection, GoogleDriveSection, DietaryDefaultsSection
+    settings/       CollapsibleSection, HouseholdSection, GoogleDriveSection, DietaryDefaultsSection
   pages/            WeeklyPlanner, Calendar, Library, EditMeal, ShoppingList, Settings
 ```
 

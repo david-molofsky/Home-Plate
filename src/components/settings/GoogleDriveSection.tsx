@@ -127,9 +127,9 @@ export function GoogleDriveSection() {
       {!connected ? (
         <>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Household sync now runs through your account (see Household above). Connecting
-            Google Drive here adds an extra backup you control directly — export/import a
-            snapshot any time, independent of that sync. Only files this app creates are
+            Household sync works by exporting your plan to Drive and having other household
+            members import it — there's no live account-based sync, so everyone stays in
+            step by exporting/importing the same file. Only files this app creates are
             accessible.
           </Typography>
           <Button variant="outlined" startIcon={<GoogleIcon />} onClick={handleConnect} disabled={busy}>
