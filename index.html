@@ -5,9 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#121212" />
     <link rel="icon" href="/icons/icon-192.png" />
+
+    <!-- iOS home-screen icon + splash: iOS ignores the manifest's
+         background_color, so without these it defaults to a white
+         launch screen regardless of the PWA manifest settings above. -->
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="96x96" href="/icons/icon-96.png" />
+    <link rel="apple-touch-icon" sizes="114x114" href="/icons/icon-114.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-120.png" />
+    <link rel="apple-touch-icon" sizes="128x128" href="/icons/icon-128.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="256x256" href="/icons/icon-256.png" />
+    <link rel="apple-touch-icon" sizes="384x384" href="/icons/icon-384.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Home Plate" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>Home Plate</title>
+    <style>
+      /* Dark background before React/MUI mount, so there is no flash
+         of white behind the icon while the app boots on any platform. */
+      html,
+      body {
+        background-color: #121212;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
