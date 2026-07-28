@@ -12,6 +12,7 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { MealPickerDialog } from '@/components/planner/MealPickerDialog';
@@ -38,6 +39,9 @@ export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
   const [showLunch, setShowLunch] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [swapOpen, setSwapOpen] = useState(false);
+  // Per-slot "remove from this day" menu — shared across all slots since
+  // only one can be open at a time; identifies which entry to delete.
+  const [slotMenu, setSlotMenu] = useState<{ anchor: HTMLElement; entryId: string } | null>(null);
 
   const planned = useLiveQuery(
     () => db.plannedMeals.where('date').equals(date).toArray(),
@@ -57,6 +61,14 @@ export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
 
   const isToday = date === dayjs().format('YYYY-MM-DD');
 
+  // Clears this slot's assignment only — the Meal itself is untouched
+  // in the Library, and the repeat-check recalculates automatically
+  // since it's driven by a live query over plannedMeals.
+  const removeEntry = async (entryId: string) => {
+    await db.plannedMeals.delete(entryId);
+    setSlotMenu(null);
+  };
+
   const renderSlotRow = (label: string, entry: PlannedMeal | undefined, mealType: MealType, diner: Diner) => {
     const meal = entry && mealById.get(entry.mealId);
     return (
@@ -72,6 +84,13 @@ export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
             {entry && repeatFlags.has(entry.id) && (
               <Chip size="small" label="⚠ repeat" color="warning" variant="outlined" />
             )}
+            <IconButton
+              size="small"
+              aria-label={`${label} options`}
+              onClick={(e) => entry && setSlotMenu({ anchor: e.currentTarget, entryId: entry.id })}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
           </>
         ) : (
           <Typography
@@ -125,6 +144,18 @@ export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
         </MenuItem>
       </Menu>
 
+      <Menu anchorEl={slotMenu?.anchor} open={!!slotMenu} onClose={() => setSlotMenu(null)}>
+        <MenuItem
+          onClick={() => slotMenu && void removeEntry(slotMenu.entryId)}
+          sx={{ color: 'error.main' }}
+        >
+          <ListItemIcon>
+            <DeleteOutlineIcon fontSize="small" color="error" />
+          </ListItemIcon>
+          <ListItemText>Remove from this day</ListItemText>
+        </MenuItem>
+      </Menu>
+
       {(breakfast || showBreakfast) && renderSlotRow('Breakfast', breakfast, 'breakfast', 'adult')}
       {(lunch || showLunch) && renderSlotRow('Lunch', lunch, 'lunch', 'adult')}
 
@@ -145,6 +176,13 @@ export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
                 {repeatFlags.has(dinnerAdult.id) && (
                   <Chip size="small" label="⚠ repeat" color="warning" variant="outlined" />
                 )}
+                <IconButton
+                  size="small"
+                  aria-label="Dinner (adult) options"
+                  onClick={(e) => setSlotMenu({ anchor: e.currentTarget, entryId: dinnerAdult.id })}
+                >
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
               </>
             ) : (
               <Typography
@@ -162,9 +200,18 @@ export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
               Kids
             </Typography>
             {dinnerKids && mealById.get(dinnerKids.mealId) ? (
-              <Typography variant="body2" sx={{ flex: 1 }}>
-                {mealById.get(dinnerKids.mealId)!.name}
-              </Typography>
+              <>
+                <Typography variant="body2" sx={{ flex: 1 }}>
+                  {mealById.get(dinnerKids.mealId)!.name}
+                </Typography>
+                <IconButton
+                  size="small"
+                  aria-label="Dinner (kids) options"
+                  onClick={(e) => setSlotMenu({ anchor: e.currentTarget, entryId: dinnerKids.id })}
+                >
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
+              </>
             ) : (
               <Typography
                 variant="body2"

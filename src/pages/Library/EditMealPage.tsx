@@ -12,10 +12,15 @@ import IconButton from '@mui/material/IconButton';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Divider from '@mui/material/Divider';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { db } from '@/services/database/db';
 import { newId } from '@/utils/id';
 import { getAisleConfig } from '@/services/aisles/aislesService';
+import dayjs from 'dayjs';
 import type { DietaryTag, EffortTag, Ingredient, Meal, MealType, RecipeStep, SizeTag } from '@/models';
 import { ROUTES } from '@/routes/paths';
 
@@ -43,11 +48,21 @@ export function EditMealPage() {
   const { mealId } = useParams();
   const navigate = useNavigate();
   const [meal, setMeal] = useState<Meal>(emptyMeal());
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const isNew = !mealId;
 
   const aisleConfig = useLiveQuery(() => getAisleConfig(), []);
   const visibleAisleOptions = (aisleConfig ?? []).filter((a) => !a.hidden);
   const defaultAisleId = visibleAisleOptions[0]?.id ?? 'other';
+
+  // Count of this meal's appearances on today or later, shown as a
+  // heads-up in the delete confirmation (deleting the meal does not
+  // touch already-planned days — see handleDelete).
+  const upcomingUsageCount = useLiveQuery(async () => {
+    if (!mealId) return 0;
+    const today = dayjs().format('YYYY-MM-DD');
+    return db.plannedMeals.where('mealId').equals(mealId).and((p) => p.date >= today).count();
+  }, [mealId]);
 
   useEffect(() => {
     if (mealId) {
@@ -58,6 +73,18 @@ export function EditMealPage() {
   const save = async () => {
     if (!meal.name.trim()) return;
     await db.meals.put({ ...meal, updatedAt: new Date().toISOString() });
+    navigate(ROUTES.library);
+  };
+
+  const handleDelete = async () => {
+    if (!mealId) return;
+    // plannedMeals stores only mealId, not a name snapshot, so once the
+    // meal is gone any day that had it will render as an empty
+    // ("tap to fill") slot rather than a stale name — the orphaned
+    // plannedMeals row is left in place but is effectively invisible.
+    // The confirm dialog warns about this before it happens.
+    await db.meals.delete(mealId);
+    setConfirmDeleteOpen(false);
     navigate(ROUTES.library);
   };
 
@@ -303,10 +330,59 @@ export function EditMealPage() {
           </Stack>
         </Box>
 
-        <Button variant="contained" size="large" onClick={() => void save()}>
-          Save Meal
-        </Button>
+        <Stack direction="row" spacing={1}>
+          {!isNew && (
+            <Button
+              variant="outlined"
+              color="error"
+              size="large"
+              onClick={() => setConfirmDeleteOpen(true)}
+              sx={{ flex: 0.25, minWidth: 0, px: 1 }}
+            >
+              Delete
+            </Button>
+          )}
+          <Button
+            variant="outlined"
+            size="large"
+            onClick={() => navigate(ROUTES.library)}
+            sx={{ flex: isNew ? 0.5 : 0.25, minWidth: 0, px: 1 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            size="large"
+            onClick={() => void save()}
+            sx={{ flex: 0.5, minWidth: 0 }}
+          >
+            Save Meal
+          </Button>
+        </Stack>
       </Stack>
+
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+        <DialogTitle>Delete &ldquo;{meal.name || 'this meal'}&rdquo;?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            This removes it from your Library permanently. Any days already planned with this
+            meal will show as unfilled slots — this won&apos;t delete those days themselves.
+          </Typography>
+          {!!upcomingUsageCount && (
+            <Typography variant="body2" color="warning.main" sx={{ mt: 1.5 }}>
+              ⚠ Planned on {upcomingUsageCount} upcoming day{upcomingUsageCount === 1 ? '' : 's'} —
+              you&apos;ll need to refill {upcomingUsageCount === 1 ? 'it' : 'them'} with a
+              different meal.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={() => void handleDelete()}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
