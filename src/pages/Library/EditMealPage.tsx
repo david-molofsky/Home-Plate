@@ -9,7 +9,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
-import Switch from '@mui/material/Switch';
+import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Divider from '@mui/material/Divider';
 import Dialog from '@mui/material/Dialog';
@@ -20,14 +20,28 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { db } from '@/services/database/db';
 import { newId } from '@/utils/id';
 import { getAisleConfig } from '@/services/aisles/aislesService';
+import { CATEGORY_COLORS } from '@/theme/theme';
 import dayjs from 'dayjs';
-import type { DietaryTag, EffortTag, Ingredient, Meal, MealType, RecipeStep, SizeTag } from '@/models';
+import type {
+  DietaryTag,
+  DinerCategory,
+  EffortTag,
+  Ingredient,
+  IngredientUnit,
+  Meal,
+  MealType,
+  RecipeStep,
+  SizeTag,
+} from '@/models';
 import { ROUTES } from '@/routes/paths';
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner'];
 const EFFORT: EffortTag[] = ['easy', 'time-consuming'];
 const SIZE: SizeTag[] = ['small', 'big'];
 const DIETARY: DietaryTag[] = ['vegetarian', 'vegan', 'gluten-free', 'dairy-free'];
+const CATEGORIES: DinerCategory[] = ['adult', 'kids', 'both'];
+const CATEGORY_LABEL: Record<DinerCategory, string> = { adult: 'Adults', kids: 'Kids', both: 'Both' };
+const UNIT_OPTIONS: IngredientUnit[] = ['g', 'kg', 'ml', 'l', 'oz', 'lb', 'cup', 'tbsp', 'tsp', 'pieces', 'other'];
 
 function emptyMeal(): Meal {
   const now = new Date().toISOString();
@@ -36,7 +50,7 @@ function emptyMeal(): Meal {
     name: '',
     mealType: 'dinner',
     dietary: [],
-    isKidsMeal: false,
+    category: 'adult',
     ingredients: [],
     steps: [],
     createdAt: now,
@@ -89,7 +103,13 @@ export function EditMealPage() {
   };
 
   const addIngredient = () => {
-    const ing: Ingredient = { id: newId(), name: '', quantity: '', aisle: defaultAisleId };
+    const ing: Ingredient = {
+      id: newId(),
+      name: '',
+      quantity: '',
+      aisle: defaultAisleId,
+      shared: true,
+    };
     setMeal({ ...meal, ingredients: [...meal.ingredients, ing] });
   };
   const updateIngredient = (id: string, patch: Partial<Ingredient>) => {
@@ -101,6 +121,52 @@ export function EditMealPage() {
   const removeIngredient = (id: string) => {
     setMeal({ ...meal, ingredients: meal.ingredients.filter((i) => i.id !== id) });
   };
+
+  // Renders one amount + unit dropdown (+ custom unit fallback when
+  // "Other" is picked). Reused for the shared/single amount and for
+  // each of the adult/kid split amounts on "Both" meals.
+  const renderAmountRow = (
+    amount: string,
+    unit: IngredientUnit | undefined,
+    customUnit: string | undefined,
+    onChange: (patch: { amount?: string; unit?: IngredientUnit; customUnit?: string }) => void,
+  ) => (
+    <Stack direction="row" spacing={1} sx={{ flex: 1 }}>
+      <TextField
+        size="small"
+        placeholder="Amount"
+        value={amount}
+        onChange={(e) => onChange({ amount: e.target.value })}
+        sx={{ flex: 1 }}
+      />
+      <TextField
+        select
+        size="small"
+        value={unit ?? ''}
+        onChange={(e) => onChange({ unit: (e.target.value || undefined) as IngredientUnit | undefined })}
+        sx={{ flex: 1.2 }}
+        SelectProps={{ displayEmpty: true }}
+      >
+        <MenuItem value="">
+          <em>Unit</em>
+        </MenuItem>
+        {UNIT_OPTIONS.map((u) => (
+          <MenuItem key={u} value={u}>
+            {u === 'other' ? 'Other…' : u}
+          </MenuItem>
+        ))}
+      </TextField>
+      {unit === 'other' && (
+        <TextField
+          size="small"
+          placeholder="e.g. bunch"
+          value={customUnit ?? ''}
+          onChange={(e) => onChange({ customUnit: e.target.value })}
+          sx={{ flex: 1.2 }}
+        />
+      )}
+    </Stack>
+  );
 
   const addStep = () => {
     const step: RecipeStep = { id: newId(), title: '', content: '' };
@@ -160,15 +226,26 @@ export function EditMealPage() {
         </TextField>
 
         {meal.mealType === 'dinner' && (
-          <FormControlLabel
-            control={
-              <Switch
-                checked={meal.isKidsMeal}
-                onChange={(e) => setMeal({ ...meal, isKidsMeal: e.target.checked })}
-              />
-            }
-            label="This is a kids' meal"
-          />
+          <Box>
+            <Typography variant="caption" color="text.secondary">
+              Who&apos;s this for?
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+              {CATEGORIES.map((c) => (
+                <Chip
+                  key={c}
+                  label={CATEGORY_LABEL[c]}
+                  onClick={() => setMeal({ ...meal, category: c })}
+                  sx={{
+                    fontWeight: 700,
+                    bgcolor: meal.category === c ? CATEGORY_COLORS[c] : 'action.hover',
+                    color: meal.category === c ? '#fff' : 'text.secondary',
+                    '&:hover': { bgcolor: meal.category === c ? CATEGORY_COLORS[c] : 'action.selected' },
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
         )}
 
         <Box>
@@ -219,16 +296,6 @@ export function EditMealPage() {
           </Stack>
         </Box>
 
-        <FormControlLabel
-          control={
-            <Switch
-              checked={!!meal.wouldMakeAgain}
-              onChange={(e) => setMeal({ ...meal, wouldMakeAgain: e.target.checked })}
-            />
-          }
-          label="Would make again"
-        />
-
         <Divider />
 
         <Box>
@@ -238,44 +305,113 @@ export function EditMealPage() {
               + Add ingredient
             </Button>
           </Stack>
-          <Stack spacing={1}>
-            {meal.ingredients.map((ing) => (
-              <Stack direction="row" spacing={1} key={ing.id} alignItems="center">
-                <TextField
-                  size="small"
-                  placeholder="Ingredient"
-                  value={ing.name}
-                  onChange={(e) => updateIngredient(ing.id, { name: e.target.value })}
-                  sx={{ flex: 2 }}
-                />
-                <TextField
-                  size="small"
-                  placeholder="Qty"
-                  value={ing.quantity}
-                  onChange={(e) => updateIngredient(ing.id, { quantity: e.target.value })}
-                  sx={{ flex: 1 }}
-                />
-                <TextField
-                  select
-                  size="small"
-                  value={ing.aisle}
-                  onChange={(e) => updateIngredient(ing.id, { aisle: e.target.value })}
-                  sx={{ flex: 1.5 }}
+          {meal.category === 'both' && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              <b>Both</b> is selected — mark an ingredient Shared if the amount doesn&apos;t change
+              based on adults vs. kids. Leave unchecked to set separate adult and kid amounts.
+            </Typography>
+          )}
+          <Stack spacing={1.25}>
+            {meal.ingredients.map((ing) => {
+              const isSplit = meal.category === 'both' && ing.shared === false;
+              return (
+                <Stack
+                  key={ing.id}
+                  spacing={1}
+                  sx={{ p: 1.25, bgcolor: 'action.hover', borderRadius: 2 }}
                 >
-                  {(aisleConfig ?? [])
-                    .filter((a) => !a.hidden || a.id === ing.aisle)
-                    .map((a) => (
-                      <MenuItem key={a.id} value={a.id}>
-                        {a.name}
-                        {a.hidden ? ' (hidden)' : ''}
-                      </MenuItem>
-                    ))}
-                </TextField>
-                <IconButton size="small" onClick={() => removeIngredient(ing.id)}>
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </Stack>
-            ))}
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <TextField
+                      size="small"
+                      placeholder="Ingredient"
+                      value={ing.name}
+                      onChange={(e) => updateIngredient(ing.id, { name: e.target.value })}
+                      sx={{ flex: 2 }}
+                    />
+                    <TextField
+                      select
+                      size="small"
+                      value={ing.aisle}
+                      onChange={(e) => updateIngredient(ing.id, { aisle: e.target.value })}
+                      sx={{ flex: 1.5 }}
+                    >
+                      {(aisleConfig ?? [])
+                        .filter((a) => !a.hidden || a.id === ing.aisle)
+                        .map((a) => (
+                          <MenuItem key={a.id} value={a.id}>
+                            {a.name}
+                            {a.hidden ? ' (hidden)' : ''}
+                          </MenuItem>
+                        ))}
+                    </TextField>
+                    <IconButton size="small" onClick={() => removeIngredient(ing.id)}>
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+
+                  {meal.category === 'both' && (
+                    <FormControlLabel
+                      sx={{ ml: 0 }}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={ing.shared !== false}
+                          onChange={(e) => updateIngredient(ing.id, { shared: e.target.checked })}
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" color="text.secondary">
+                          Shared amount (same regardless of who&apos;s eating)
+                        </Typography>
+                      }
+                    />
+                  )}
+
+                  {!isSplit ? (
+                    renderAmountRow(ing.quantity, ing.unit, ing.customUnit, (patch) =>
+                      updateIngredient(ing.id, {
+                        ...(patch.amount !== undefined ? { quantity: patch.amount } : {}),
+                        ...(patch.unit !== undefined ? { unit: patch.unit } : {}),
+                        ...(patch.customUnit !== undefined ? { customUnit: patch.customUnit } : {}),
+                      }),
+                    )
+                  ) : (
+                    <Stack spacing={0.75}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography
+                          variant="caption"
+                          sx={{ width: 44, flexShrink: 0, fontWeight: 700, color: CATEGORY_COLORS.adult }}
+                        >
+                          ADULT
+                        </Typography>
+                        {renderAmountRow(ing.adultQuantity ?? '', ing.adultUnit, ing.adultCustomUnit, (patch) =>
+                          updateIngredient(ing.id, {
+                            ...(patch.amount !== undefined ? { adultQuantity: patch.amount } : {}),
+                            ...(patch.unit !== undefined ? { adultUnit: patch.unit } : {}),
+                            ...(patch.customUnit !== undefined ? { adultCustomUnit: patch.customUnit } : {}),
+                          }),
+                        )}
+                      </Stack>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography
+                          variant="caption"
+                          sx={{ width: 44, flexShrink: 0, fontWeight: 700, color: CATEGORY_COLORS.kids }}
+                        >
+                          KID
+                        </Typography>
+                        {renderAmountRow(ing.kidQuantity ?? '', ing.kidUnit, ing.kidCustomUnit, (patch) =>
+                          updateIngredient(ing.id, {
+                            ...(patch.amount !== undefined ? { kidQuantity: patch.amount } : {}),
+                            ...(patch.unit !== undefined ? { kidUnit: patch.unit } : {}),
+                            ...(patch.customUnit !== undefined ? { kidCustomUnit: patch.customUnit } : {}),
+                          }),
+                        )}
+                      </Stack>
+                    </Stack>
+                  )}
+                </Stack>
+              );
+            })}
           </Stack>
         </Box>
 

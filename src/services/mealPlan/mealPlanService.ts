@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
-import type { Aisle, Diner, Meal, PlannedMeal, ShoppingListItem } from '@/models';
+import type { Aisle, Diner, Ingredient, IngredientUnit, Meal, PlannedMeal, ShoppingListItem } from '@/models';
 
 /**
  * Flags dinners that repeat within any rolling 7-day window — not
@@ -49,10 +49,39 @@ export async function getRepeatFlagsForRange(
   return findRepeatedDinners(planned);
 }
 
+/** Resolves which amount/unit to use for an ingredient given the diner
+ * of the specific PlannedMeal entry it's being pulled in for. Only
+ * dinner meals with category 'both' and a non-shared ingredient
+ * actually split between adult/kid amounts; everything else always
+ * uses the base quantity/unit/customUnit fields. */
+function resolveIngredientAmount(
+  meal: Meal,
+  ing: Ingredient,
+  diner: Diner,
+): { amount: string; unit?: IngredientUnit; customUnit?: string } {
+  const isSplit = meal.mealType === 'dinner' && meal.category === 'both' && ing.shared === false;
+  if (!isSplit) {
+    return { amount: ing.quantity, unit: ing.unit, customUnit: ing.customUnit };
+  }
+  return diner === 'kids'
+    ? { amount: ing.kidQuantity ?? '', unit: ing.kidUnit, customUnit: ing.kidCustomUnit }
+    : { amount: ing.adultQuantity ?? '', unit: ing.adultUnit, customUnit: ing.adultCustomUnit };
+}
+
+function formatAmount(amount: string, unit: IngredientUnit | undefined, customUnit: string | undefined): string {
+  if (!amount) return '';
+  const label = unit === 'other' ? customUnit ?? '' : unit ?? '';
+  return label ? `${amount} ${label}` : amount;
+}
+
 /** Builds the shopping list from all planned meals in a date range,
- * aggregating ingredients by name+aisle (case-insensitive) and summing
- * simple numeric quantities where possible; otherwise concatenates
- * quantity text. Manual items already in the list are preserved. */
+ * aggregating ingredients by name+aisle (case-insensitive). Amounts
+ * are resolved per-diner first (see resolveIngredientAmount) so split
+ * "Both" ingredients pull the right adult/kid amount before summing.
+ * Same-unit amounts are summed numerically; mismatched units fall back
+ * to concatenated text — full consolidation with expandable per-source
+ * sub-bullets is a separate, not-yet-built backlog item. Manual items
+ * already in the list are preserved. */
 export async function generateShoppingList(
   rangeStart: string,
   rangeEnd: string,
@@ -73,15 +102,17 @@ export async function generateShoppingList(
     const meal = mealById.get(p.mealId);
     if (!meal) continue;
     for (const ing of meal.ingredients) {
+      const resolved = resolveIngredientAmount(meal, ing, p.diner);
+      const formatted = formatAmount(resolved.amount, resolved.unit, resolved.customUnit);
       const key = `${ing.name.trim().toLowerCase()}__${ing.aisle}`;
       const existing = aggregated.get(key);
       if (existing) {
-        existing.quantity = combineQuantities(existing.quantity, ing.quantity);
+        existing.quantity = combineQuantities(existing.quantity, formatted);
       } else {
         aggregated.set(key, {
           id: key,
           name: ing.name,
-          quantity: ing.quantity,
+          quantity: formatted,
           aisle: ing.aisle,
           checked: false,
           manual: false,
@@ -99,11 +130,22 @@ export async function generateShoppingList(
   return [...aggregated.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Sums two formatted amount strings (e.g. "2 cup", "400 g", "3") when
+ * their units match; otherwise concatenates them as text so nothing is
+ * silently dropped. Unit-aware so "2 cup" + "3 tbsp" no longer gets
+ * wrongly summed as if both were bare numbers. */
 function combineQuantities(a: string, b: string): string {
-  const numA = Number(a);
-  const numB = Number(b);
-  if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
-    return String(numA + numB);
+  if (!a) return b;
+  if (!b) return a;
+  const [numA, ...unitPartsA] = a.split(' ');
+  const [numB, ...unitPartsB] = b.split(' ');
+  const unitA = unitPartsA.join(' ');
+  const unitB = unitPartsB.join(' ');
+  const parsedA = Number(numA);
+  const parsedB = Number(numB);
+  if (!Number.isNaN(parsedA) && !Number.isNaN(parsedB) && unitA === unitB) {
+    const sum = parsedA + parsedB;
+    return unitA ? `${sum} ${unitA}` : String(sum);
   }
   return `${a} + ${b}`;
 }

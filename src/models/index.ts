@@ -11,6 +11,29 @@ export type EffortTag = 'easy' | 'time-consuming';
 export type SizeTag = 'small' | 'big';
 export type DietaryTag = 'vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free' | 'none';
 
+/** Replaces the old boolean isKidsMeal flag. Only meaningful when
+ * mealType === 'dinner' — breakfast/lunch always behave as a single
+ * shared meal regardless of this value. */
+export type DinerCategory = 'adult' | 'kids' | 'both';
+
+/** Standard unit options for ingredient amounts. 'other' triggers a
+ * free-text custom unit (see Ingredient.customUnit /
+ * .adultCustomUnit / .kidCustomUnit) — custom units are excluded from
+ * shopping-list auto-consolidation matching since they can't be
+ * reliably compared. */
+export type IngredientUnit =
+  | 'g'
+  | 'kg'
+  | 'ml'
+  | 'l'
+  | 'oz'
+  | 'lb'
+  | 'cup'
+  | 'tbsp'
+  | 'tsp'
+  | 'pieces'
+  | 'other';
+
 /**
  * Aisles used to be a fixed union type. They're now a household-editable,
  * ordered list (see services/aisles/aislesService) so people can hide
@@ -45,8 +68,30 @@ export const DEFAULT_AISLES: AisleConfig[] = [
 export interface Ingredient {
   id: string;
   name: string;
-  quantity: string; // free text, e.g. "2", "400g" — kept simple deliberately
   aisle: Aisle;
+  /** Free-text amount, e.g. "2", "1/2" — kept simple deliberately.
+   * Used directly when the owning meal's category isn't 'both', or
+   * when it is 'both' but `shared` isn't explicitly false. Existing
+   * ingredients created before units existed keep working unchanged:
+   * `unit` stays undefined/blank until that meal is next edited — no
+   * forced migration. */
+  quantity: string;
+  unit?: IngredientUnit;
+  /** Only populated when unit === 'other'. */
+  customUnit?: string;
+  /** Only meaningful when the owning meal's category is 'both'.
+   * true/undefined (default) = one amount (quantity/unit above) used
+   * regardless of which dinner slot(s) the meal is planned into.
+   * false = separate adult/kid amounts below, summed only when the
+   * meal is planned into both the Adult and Kids dinner slot on the
+   * same day; otherwise only the relevant diner's amount is used. */
+  shared?: boolean;
+  adultQuantity?: string;
+  adultUnit?: IngredientUnit;
+  adultCustomUnit?: string;
+  kidQuantity?: string;
+  kidUnit?: IngredientUnit;
+  kidCustomUnit?: string;
 }
 
 export interface RecipeStep {
@@ -63,11 +108,11 @@ export interface Meal {
   effort?: EffortTag;
   size?: SizeTag;
   dietary: DietaryTag[];
-  isKidsMeal: boolean; // only meaningful when mealType === 'dinner'
+  /** Only meaningful when mealType === 'dinner' — see DinerCategory. */
+  category: DinerCategory;
   ingredients: Ingredient[];
   steps: RecipeStep[];
   notes?: string;
-  wouldMakeAgain?: boolean;
   /** True when this meal was created via the "quick add to day" flow
    * (typed straight into a planner slot) rather than the full Add Meal
    * form. Surfaced as a filter in the Library so it can be found and

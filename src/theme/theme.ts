@@ -105,4 +105,14 @@ export const BUTTON_ACCENT = {
   dark: '#7E57C2',
 };
 
+/** Color coding for the Adults/Kids/Both dinner category. Kids and
+ * Both reuse the app-wide teal/violet accents; Adult uses a distinct
+ * salmon deliberately kept apart from the primary pink so it doesn't
+ * read as "the app's default color" for one specific category. */
+export const CATEGORY_COLORS: Record<'adult' | 'kids' | 'both', string> = {
+  adult: '#FF7566',
+  kids: '#4DD0C8',
+  both: '#9575CD',
+};
+
 export const theme = createAppTheme('dark');

@@ -48,6 +48,29 @@ class HomePlateDB extends Dexie {
       appSettings: 'key, realmId',
       deviceSettings: 'key',
     });
+    // v4: isKidsMeal (boolean) replaced by category ('adult' | 'kids' |
+    // 'both') per the dual-category product decision. Also drops
+    // wouldMakeAgain, which was removed as a concept entirely — Library
+    // membership already implies it. Needs a real upgrade() since the
+    // meaning changes shape (bool -> enum), not just an added column.
+    this.version(4)
+      .stores({
+        meals: 'id, mealType, category, name, isQuickAdd, realmId',
+        plannedMeals: 'id, date, mealType, diner, mealId, realmId',
+        shoppingListItems: 'id, aisle, checked, realmId',
+        appSettings: 'key, realmId',
+        deviceSettings: 'key',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('meals')
+          .toCollection()
+          .modify((meal: Record<string, unknown>) => {
+            meal.category = meal.isKidsMeal ? 'kids' : 'adult';
+            delete meal.isKidsMeal;
+            delete meal.wouldMakeAgain;
+          });
+      });
   }
 }
 

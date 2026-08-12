@@ -45,8 +45,11 @@ export function MealPickerDialog({ open, onClose, date, mealType, diner }: MealP
   const meals = useLiveQuery(() => db.meals.where('mealType').equals(mealType).toArray(), [mealType]);
 
   // A meal fits this slot if it's the right mealType and, for dinner,
-  // the right adult/kids split.
-  const fitsSlot = (m: Meal) => mealType !== 'dinner' || m.isKidsMeal === (diner === 'kids');
+  // its category covers this diner ('both' fits either slot).
+  const fitsSlot = (m: Meal) => {
+    if (mealType !== 'dinner') return true;
+    return diner === 'kids' ? m.category === 'kids' || m.category === 'both' : m.category === 'adult' || m.category === 'both';
+  };
 
   const filtered = useMemo(() => {
     if (!meals) return [];
@@ -101,7 +104,7 @@ export function MealPickerDialog({ open, onClose, date, mealType, diner }: MealP
       name: query,
       mealType,
       dietary: [],
-      isKidsMeal: mealType === 'dinner' && diner === 'kids',
+      category: mealType === 'dinner' && diner === 'kids' ? 'kids' : 'adult',
       ingredients: [],
       steps: [],
       isQuickAdd: true,

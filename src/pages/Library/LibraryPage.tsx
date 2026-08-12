@@ -10,6 +10,7 @@ import CardActionArea from '@mui/material/CardActionArea';
 import { useNavigate } from 'react-router-dom';
 import { db } from '@/services/database/db';
 import { ROUTES, editMealPath } from '@/routes/paths';
+import { CATEGORY_COLORS } from '@/theme/theme';
 import type { MealType } from '@/models';
 
 const TYPE_FILTERS: (MealType | 'all')[] = ['all', 'breakfast', 'lunch', 'dinner'];
@@ -70,7 +71,17 @@ export function LibraryPage() {
                 </Stack>
                 <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                   {meal.isQuickAdd && <Chip size="small" color="secondary" label="quick add" />}
-                  {meal.isKidsMeal && <Chip size="small" color="secondary" label="kids" />}
+                  {meal.mealType === 'dinner' && (
+                    <Chip
+                      size="small"
+                      label={meal.category === 'both' ? 'Both' : meal.category === 'kids' ? 'Kids' : 'Adults'}
+                      sx={{
+                        bgcolor: `${CATEGORY_COLORS[meal.category]}26`,
+                        color: CATEGORY_COLORS[meal.category],
+                        fontWeight: 700,
+                      }}
+                    />
+                  )}
                   {meal.effort && <Chip size="small" label={meal.effort} />}
                   {meal.size && <Chip size="small" label={meal.size} />}
                   {meal.dietary.map((d) => (
