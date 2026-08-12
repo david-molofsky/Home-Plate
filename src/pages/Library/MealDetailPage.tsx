@@ -13,7 +13,7 @@ import RestaurantIcon from '@mui/icons-material/Restaurant';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { db } from '@/services/database/db';
 import { CATEGORY_COLORS } from '@/theme/theme';
-import { ROUTES, editMealPath } from '@/routes/paths';
+import { ROUTES, editMealPath, cookingModePath } from '@/routes/paths';
 import type { Ingredient } from '@/models';
 
 const CATEGORY_LABEL = { adult: 'Adults', kids: 'Kids', both: 'Both' } as const;
@@ -207,11 +207,8 @@ export function MealDetailPage() {
           size="large"
           startIcon={<PlayArrowIcon />}
           disabled={!canStartCooking}
+          onClick={() => navigate(cookingModePath(meal.id))}
           sx={{ mt: 1 }}
-          // Cooking Mode itself (the full-screen step-by-step timer UI)
-          // is a separate, not-yet-built backlog item — this button is
-          // wired up to be enabled/disabled correctly ahead of that, but
-          // doesn't navigate anywhere yet.
         >
           {canStartCooking ? 'Start Cooking' : 'Add steps to enable cooking mode'}
         </Button>

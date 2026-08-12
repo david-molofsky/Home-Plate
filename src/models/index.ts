@@ -173,6 +173,20 @@ export interface ShoppingListItem {
 /** Shared household settings — stored in appSettings, which is included
  * in Google Drive export/import (see services/googleDrive), so these
  * travel with the rest of the household's plan. */
+/** A currently-running cooking-mode timer. Stored device-locally (see
+ * DEVICE_SETTINGS_KEYS.activeCookingTimer) keyed off a target
+ * end-timestamp rather than a countdown value, so elapsed time is
+ * still correct after the tab is backgrounded/resumed — a plain
+ * setInterval countdown can't be trusted to fire on schedule if
+ * suspended. */
+export interface ActiveCookingTimer {
+  mealId: string;
+  mealName: string;
+  stepId: string;
+  stepTitle: string;
+  targetEndsAt: string; // ISO
+}
+
 export const SETTINGS_KEYS = {
   colorMode: 'colorMode',
   dietaryDefaults: 'dietaryDefaults',
@@ -189,6 +203,11 @@ export const DEVICE_SETTINGS_KEYS = {
   googleDriveToken: 'googleDriveToken',
   autoBackupEnabled: 'autoBackupEnabled',
   lastAutoBackupAt: 'lastAutoBackupAt',
+  /** Currently-running cooking-mode timer, if any (see
+   * hooks/useCookingTimer). Device-local and excluded from Drive
+   * export/import like the rest of this table — a timer belongs to
+   * whichever device is actually in the kitchen. */
+  activeCookingTimer: 'activeCookingTimer',
 } as const;
 
 export interface AppSettingsRecord {
