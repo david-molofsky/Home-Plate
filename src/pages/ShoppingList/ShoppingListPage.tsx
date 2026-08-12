@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -7,14 +8,17 @@ import Checkbox from '@mui/material/Checkbox';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
+import Link from '@mui/material/Link';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { generateShoppingList, groupByAisle } from '@/services/mealPlan/mealPlanService';
 import { getAisleConfig } from '@/services/aisles/aislesService';
+import { editMealPath } from '@/routes/paths';
 import type { ShoppingListItem } from '@/models';
 import { newId } from '@/utils/id';
 
 export function ShoppingListPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<ShoppingListItem[]>([]);
   const [manualName, setManualName] = useState('');
   const [manualAisle, setManualAisle] = useState<string | null>(null);
@@ -108,21 +112,48 @@ export function ShoppingListPage() {
             <Typography variant="subtitle2" color="primary.light" fontWeight={700} sx={{ mb: 0.5 }}>
               {aisleLabel(aisleId)}
             </Typography>
-            <Stack>
+            <Stack spacing={0.75}>
               {aisleItems.map((item) => (
-                <Stack direction="row" alignItems="center" key={item.id}>
-                  <Checkbox
-                    size="small"
-                    checked={item.checked}
-                    onChange={() => void toggleChecked(item)}
-                  />
-                  <Typography
-                    variant="body2"
-                    sx={{ textDecoration: item.checked ? 'line-through' : 'none' }}
-                  >
-                    {item.name}
-                    {item.quantity ? ` × ${item.quantity}` : ''}
-                  </Typography>
+                <Stack key={item.id}>
+                  <Stack direction="row" alignItems="center">
+                    <Checkbox
+                      size="small"
+                      checked={item.checked}
+                      onChange={() => void toggleChecked(item)}
+                    />
+                    <Typography
+                      variant="body2"
+                      sx={{ textDecoration: item.checked ? 'line-through' : 'none' }}
+                    >
+                      {item.name}
+                      {item.quantity ? ` × ${item.quantity}` : ''}
+                    </Typography>
+                  </Stack>
+                  {item.sources && item.sources.length > 0 && (
+                    <Stack sx={{ pl: 5.5 }} spacing={0.25}>
+                      {item.sources.map((source, idx) => (
+                        <Typography
+                          key={`${item.id}-${idx}`}
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textDecoration: item.checked ? 'line-through' : 'none' }}
+                        >
+                          {source.amount ? `${source.amount} — ` : ''}
+                          <Link
+                            component="button"
+                            variant="caption"
+                            underline="hover"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(editMealPath(source.mealId));
+                            }}
+                          >
+                            {source.mealName}
+                          </Link>
+                        </Typography>
+                      ))}
+                    </Stack>
+                  )}
                 </Stack>
               ))}
             </Stack>

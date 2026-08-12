@@ -136,13 +136,33 @@ export interface PlannedMeal {
   madeAt?: string; // ISO — set when marked as actually made, feeds "last made" stats
 }
 
+/** One contributing meal's amount for an ingredient that couldn't be
+ * safely summed with the others (mismatched or custom units). Shown
+ * as an always-expanded sub-bullet under the grouped ingredient line,
+ * with mealName as a tappable link to that meal's Library entry. */
+export interface ShoppingListItemSource {
+  mealId: string;
+  mealName: string;
+  /** Formatted "amount unit" string for this specific source, e.g.
+   * "2 cup" — may be blank if the ingredient had no amount set. */
+  amount: string;
+}
+
 export interface ShoppingListItem {
   id: string;
   name: string;
-  quantity: string;
   aisle: Aisle;
   checked: boolean;
   manual: boolean; // true if added manually rather than derived from planned meals
+  /** Combined "amount unit" display string, e.g. "4 cloves" — set
+   * when every contributing source shares the same standard unit (or
+   * there's only one source). Mutually exclusive with `sources`. */
+  quantity?: string;
+  /** Set only when multiple sources exist with mismatched or custom
+   * units that couldn't be safely summed — one entry per contributing
+   * meal, always rendered expanded rather than collapsed/tap-to-reveal.
+   * Mutually exclusive with `quantity`. */
+  sources?: ShoppingListItemSource[];
 }
 
 /** Shared household settings — stored in appSettings, which is included

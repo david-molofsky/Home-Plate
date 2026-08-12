@@ -74,14 +74,29 @@ function formatAmount(amount: string, unit: IngredientUnit | undefined, customUn
   return label ? `${amount} ${label}` : amount;
 }
 
-/** Builds the shopping list from all planned meals in a date range,
- * aggregating ingredients by name+aisle (case-insensitive). Amounts
- * are resolved per-diner first (see resolveIngredientAmount) so split
- * "Both" ingredients pull the right adult/kid amount before summing.
- * Same-unit amounts are summed numerically; mismatched units fall back
- * to concatenated text — full consolidation with expandable per-source
- * sub-bullets is a separate, not-yet-built backlog item. Manual items
- * already in the list are preserved. */
+interface ConsolidationEntry {
+  mealId: string;
+  mealName: string;
+  amount: string;
+  unit?: IngredientUnit;
+  customUnit?: string;
+}
+
+/** Builds the shopping list from all planned meals in a date range.
+ * Ingredients are grouped by exact name (case-insensitive) — no
+ * plural normalization yet, so "chicken breast" and "chicken breasts"
+ * stay separate; that's a parked follow-on item. Amounts are resolved
+ * per-diner first (see resolveIngredientAmount) so split "Both"
+ * ingredients pull the right adult/kid amount before grouping.
+ *
+ * When every contributing source shares the same standard unit (or
+ * there's only one source), amounts sum silently into a single flat
+ * line. When units mismatch — or any source uses a custom ("Other")
+ * unit, which never auto-consolidates even against an identical
+ * custom label — the group instead carries a `sources` list, meant to
+ * always render as expanded sub-bullets (one per contributing meal)
+ * rather than a collapsed/tap-to-reveal summary. Manual items already
+ * in the list are preserved. */
 export async function generateShoppingList(
   rangeStart: string,
   rangeEnd: string,
@@ -96,28 +111,66 @@ export async function generateShoppingList(
   const mealById = new Map<string, Meal>();
   meals.forEach((m) => m && mealById.set(m.id, m));
 
-  const aggregated = new Map<string, ShoppingListItem>();
+  const buckets = new Map<string, { displayName: string; aisle: Aisle; entries: ConsolidationEntry[] }>();
 
   for (const p of planned) {
     const meal = mealById.get(p.mealId);
     if (!meal) continue;
     for (const ing of meal.ingredients) {
+      const key = ing.name.trim().toLowerCase();
+      if (!key) continue;
       const resolved = resolveIngredientAmount(meal, ing, p.diner);
-      const formatted = formatAmount(resolved.amount, resolved.unit, resolved.customUnit);
-      const key = `${ing.name.trim().toLowerCase()}__${ing.aisle}`;
-      const existing = aggregated.get(key);
-      if (existing) {
-        existing.quantity = combineQuantities(existing.quantity, formatted);
-      } else {
-        aggregated.set(key, {
-          id: key,
-          name: ing.name,
-          quantity: formatted,
-          aisle: ing.aisle,
-          checked: false,
-          manual: false,
-        });
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { displayName: ing.name.trim(), aisle: ing.aisle, entries: [] };
+        buckets.set(key, bucket);
       }
+      bucket.entries.push({
+        mealId: meal.id,
+        mealName: meal.name,
+        amount: resolved.amount,
+        unit: resolved.unit,
+        customUnit: resolved.customUnit,
+      });
+    }
+  }
+
+  const aggregated = new Map<string, ShoppingListItem>();
+
+  for (const [key, bucket] of buckets) {
+    // Custom ("Other") units never auto-consolidate, even against an
+    // identical custom label — only a standard, matching unit across
+    // every entry (or a single lone entry) can be safely summed.
+    const canSum =
+      bucket.entries.length === 1 ||
+      bucket.entries.every((e) => e.unit !== 'other' && e.unit === bucket.entries[0].unit);
+
+    if (canSum) {
+      const quantity = bucket.entries.reduce(
+        (acc, e) => combineQuantities(acc, formatAmount(e.amount, e.unit, e.customUnit)),
+        '',
+      );
+      aggregated.set(key, {
+        id: key,
+        name: bucket.displayName,
+        aisle: bucket.aisle,
+        checked: false,
+        manual: false,
+        quantity,
+      });
+    } else {
+      aggregated.set(key, {
+        id: key,
+        name: bucket.displayName,
+        aisle: bucket.aisle,
+        checked: false,
+        manual: false,
+        sources: bucket.entries.map((e) => ({
+          mealId: e.mealId,
+          mealName: e.mealName,
+          amount: formatAmount(e.amount, e.unit, e.customUnit),
+        })),
+      });
     }
   }
 
