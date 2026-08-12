@@ -31,21 +31,22 @@ export function ShoppingListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aisleConfig]);
 
-  // Shopping list runs from today through the end of the week, not
-  // from the start of the week. generateShoppingList sums ingredient
-  // quantities across whatever range it's given, so narrowing the
-  // start to today does two things automatically: an ingredient only
-  // needed on an already-passed day drops off the list entirely, and
-  // one needed on both a passed day and a later day keeps only the
-  // later day's quantity. This re-runs (and reshrinks) every time the
-  // page loads, so it rolls forward on its own each day — no separate
-  // "clear checked items" logic needed, since the whole list
-  // regenerates from this range regardless of checked state.
+  // Shopping list is always a rolling 7-day window: today through 6
+  // days out, recalculated live on every load — not tied to a fixed
+  // calendar week. generateShoppingList sums ingredient quantities
+  // across whatever range it's given, so narrowing the start to today
+  // does two things automatically: an ingredient only needed on an
+  // already-passed day drops off the list entirely, and one needed on
+  // both a passed day and a later day keeps only the later day's
+  // quantity. This re-runs (and re-anchors) every time the page loads,
+  // so it rolls forward on its own each day — no separate "clear
+  // checked items" logic needed, since the whole list regenerates from
+  // this range regardless of checked state.
   const listStart = dayjs().format('YYYY-MM-DD');
-  const weekEnd = dayjs().endOf('week').format('YYYY-MM-DD');
+  const listEnd = dayjs().add(6, 'day').format('YYYY-MM-DD');
 
   const refresh = async () => {
-    const list = await generateShoppingList(listStart, weekEnd);
+    const list = await generateShoppingList(listStart, listEnd);
     setItems(list);
   };
 
@@ -95,8 +96,8 @@ export function ShoppingListPage() {
         Shopping List
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Built from today through the rest of this week's planned meals — items only needed
-        earlier in the week drop off automatically.
+        Built from today through the next 7 days of planned meals — items for days that have
+        passed drop off automatically as the window rolls forward.
       </Typography>
 
       {orderedAisleIds.map((aisleId) => {
