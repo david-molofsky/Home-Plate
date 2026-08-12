@@ -7,9 +7,11 @@ import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
+import Avatar from '@mui/material/Avatar';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
 import { useNavigate } from 'react-router-dom';
 import { db } from '@/services/database/db';
-import { ROUTES, editMealPath } from '@/routes/paths';
+import { ROUTES, mealDetailPath } from '@/routes/paths';
 import { CATEGORY_COLORS } from '@/theme/theme';
 import type { MealType } from '@/models';
 
@@ -64,9 +66,18 @@ export function LibraryPage() {
         <Stack spacing={1.5}>
           {filtered.map((meal) => (
             <Card key={meal.id}>
-              <CardActionArea onClick={() => navigate(editMealPath(meal.id))} sx={{ p: 1.5 }}>
+              <CardActionArea onClick={() => navigate(mealDetailPath(meal.id))} sx={{ p: 1.5 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography fontWeight={600}>{meal.name}</Typography>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Avatar
+                      src={meal.photo}
+                      variant="rounded"
+                      sx={{ width: 32, height: 32, bgcolor: 'action.hover' }}
+                    >
+                      <RestaurantIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                    </Avatar>
+                    <Typography fontWeight={600}>{meal.name}</Typography>
+                  </Stack>
                   <Chip size="small" label={meal.mealType} />
                 </Stack>
                 <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import Box from '@mui/material/Box';
@@ -17,8 +17,10 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import { db } from '@/services/database/db';
 import { newId } from '@/utils/id';
+import { downscaleImage } from '@/utils/image';
 import { getAisleConfig } from '@/services/aisles/aislesService';
 import { CATEGORY_COLORS } from '@/theme/theme';
 import dayjs from 'dayjs';
@@ -63,6 +65,8 @@ export function EditMealPage() {
   const navigate = useNavigate();
   const [meal, setMeal] = useState<Meal>(emptyMeal());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const isNew = !mealId;
 
   const aisleConfig = useLiveQuery(() => getAisleConfig(), []);
@@ -83,6 +87,19 @@ export function EditMealPage() {
       void db.meals.get(mealId).then((m) => m && setMeal(m));
     }
   }, [mealId]);
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    setPhotoError(null);
+    try {
+      const dataUrl = await downscaleImage(file);
+      setMeal((m) => ({ ...m, photo: dataUrl }));
+    } catch {
+      setPhotoError("Couldn't process that photo — try a different file.");
+    }
+  };
 
   const save = async () => {
     if (!meal.name.trim()) return;
@@ -205,6 +222,71 @@ export function EditMealPage() {
       </Stack>
 
       <Stack spacing={2}>
+        <Box>
+          <Typography variant="caption" color="text.secondary">
+            Photo (optional)
+          </Typography>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => void handlePhotoSelect(e)}
+          />
+          {meal.photo ? (
+            <Box sx={{ position: 'relative', mt: 0.5 }}>
+              <Box
+                component="img"
+                src={meal.photo}
+                alt=""
+                sx={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 2, display: 'block' }}
+              />
+              <Stack direction="row" spacing={1} sx={{ position: 'absolute', top: 8, right: 8 }}>
+                <Chip
+                  size="small"
+                  label="Replace"
+                  onClick={() => photoInputRef.current?.click()}
+                  sx={{ bgcolor: 'rgba(18,18,18,0.72)', color: '#fff' }}
+                />
+                <Chip
+                  size="small"
+                  label="Remove"
+                  onClick={() => setMeal({ ...meal, photo: undefined })}
+                  sx={{ bgcolor: 'rgba(18,18,18,0.72)', color: '#FF9E93' }}
+                />
+              </Stack>
+            </Box>
+          ) : (
+            <Box
+              onClick={() => photoInputRef.current?.click()}
+              sx={{
+                mt: 0.5,
+                height: 110,
+                border: '1.5px dashed',
+                borderColor: 'divider',
+                borderRadius: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 0.5,
+                cursor: 'pointer',
+                color: 'text.secondary',
+              }}
+            >
+              <PhotoCameraOutlinedIcon fontSize="small" />
+              <Typography variant="body2" fontWeight={600}>
+                + Add Photo
+              </Typography>
+            </Box>
+          )}
+          {photoError && (
+            <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+              {photoError}
+            </Typography>
+          )}
+        </Box>
+
         <TextField
           label="Name"
           value={meal.name}

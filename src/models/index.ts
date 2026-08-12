@@ -113,6 +113,11 @@ export interface Meal {
   ingredients: Ingredient[];
   steps: RecipeStep[];
   notes?: string;
+  /** Downscaled photo as a data URL (~300px longest edge, ~70%
+   * quality JPEG — see utils/image.ts). No full-resolution original is
+   * kept; the resize happens client-side at upload time. Optional and
+   * purely additive, so no Dexie schema bump was needed for it. */
+  photo?: string;
   /** True when this meal was created via the "quick add to day" flow
    * (typed straight into a planner slot) rather than the full Add Meal
    * form. Surfaced as a filter in the Library so it can be found and
