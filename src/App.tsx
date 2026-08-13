@@ -9,6 +9,7 @@ import { CalendarPage } from '@/pages/Calendar/CalendarPage';
 import { LibraryPage } from '@/pages/Library/LibraryPage';
 import { MealDetailPage } from '@/pages/Library/MealDetailPage';
 import { EditMealPage } from '@/pages/Library/EditMealPage';
+import { ImportRecipePage } from '@/pages/Library/ImportRecipePage';
 import { CookingModePage } from '@/pages/Library/CookingModePage';
 import { ShoppingListPage } from '@/pages/ShoppingList/ShoppingListPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
@@ -29,6 +30,7 @@ export default function App() {
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/library" element={<LibraryPage />} />
               <Route path="/library/new" element={<EditMealPage />} />
+              <Route path="/library/import" element={<ImportRecipePage />} />
               <Route path="/library/:mealId" element={<EditMealPage />} />
               <Route path="/library/:mealId/view" element={<MealDetailPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />

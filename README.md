@@ -51,6 +51,22 @@ there's no account or server behind it. Repeat the export/import whenever the pl
 the optional automatic daily backup (also in Settings) makes this easier by keeping one
 device's export always current.
 
+## Recipe import via URL setup (optional)
+
+Importing a recipe by pasting a link (Library \u2192 Import from URL) needs a small Cloudflare
+Worker to fetch pages on the app's behalf, since browsers can't fetch arbitrary cross-origin
+pages directly. Without this set up, the button still shows but importing will show a
+"not set up yet" error \u2014 nothing else in the app is affected.
+
+1. Deploy `cloudflare-worker/recipe-import-worker.js` as a Cloudflare Worker \u2014 see the
+   deploy steps in that file's header comment (dashboard-only, no local tooling needed).
+2. Copy the Worker's `*.workers.dev` URL.
+3. Set it as `VITE_RECIPE_IMPORT_WORKER_URL` \u2014 same way as `VITE_GOOGLE_CLIENT_ID` above
+   (local `.env` for dev, GitHub Actions repo secret for the deployed build).
+
+The app only ever sends it a page or image URL to fetch \u2014 no recipe or household data passes
+through it.
+
 ## Deploying as a PWA via GitHub
 
 1. Push this repo to GitHub.

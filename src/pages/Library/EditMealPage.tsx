@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -63,7 +63,14 @@ function emptyMeal(): Meal {
 export function EditMealPage() {
   const { mealId } = useParams();
   const navigate = useNavigate();
-  const [meal, setMeal] = useState<Meal>(emptyMeal());
+  const location = useLocation();
+  // Set once, via router state, by ImportRecipePage after the person
+  // confirms Set Aisles \u2014 lets this screen double as the "review
+  // imported recipe" step without duplicating the whole form. Only
+  // read on first render (useState initializer), so it can't clobber
+  // in-progress edits if location.state sticks around across renders.
+  const importedMeal = (location.state as { importedMeal?: Meal } | null)?.importedMeal;
+  const [meal, setMeal] = useState<Meal>(() => importedMeal ?? emptyMeal());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);

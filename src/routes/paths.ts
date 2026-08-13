@@ -3,6 +3,7 @@ export const ROUTES = {
   calendar: '/calendar',
   library: '/library',
   addMeal: '/library/new',
+  importRecipe: '/library/import',
   editMeal: '/library/:mealId',
   mealDetail: '/library/:mealId/view',
   cookingMode: '/library/:mealId/cook',
