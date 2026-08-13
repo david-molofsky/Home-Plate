@@ -77,6 +77,7 @@ interface GooglePickerBuilder {
   addView(view: GoogleDocsView): GooglePickerBuilder;
   setOAuthToken(token: string): GooglePickerBuilder;
   setDeveloperKey(key: string): GooglePickerBuilder;
+  setOrigin(origin: string): GooglePickerBuilder;
   setCallback(callback: (data: GooglePickerResponse) => void): GooglePickerBuilder;
   setTitle(title: string): GooglePickerBuilder;
   build(): { setVisible(visible: boolean): void };
@@ -206,7 +207,15 @@ export async function clearSharedFolder(): Promise<void> {
  * this just lets the person point the app at one of them). Requires
  * VITE_GOOGLE_PICKER_API_KEY; throws a clear error if it's missing
  * rather than silently failing. Resolves to the chosen folder, or null
- * if the person closed the picker without choosing one. */
+ * if the person closed the picker without choosing one.
+ *
+ * setOrigin() is required, not optional — without it the Picker can
+ * render its dimmed backdrop but fail to load the actual dialog iframe
+ * on top of it (postMessage origin check fails), leaving the page
+ * stuck on a grey overlay with nothing to interact with and no error.
+ * A timeout guards the same failure mode for causes setOrigin doesn't
+ * fix (e.g. third-party cookies/trackers blocked), so the promise
+ * always settles instead of hanging forever. */
 export async function openFolderPicker(): Promise<SharedDriveFolder | null> {
   if (!PICKER_API_KEY) {
     throw new Error(
@@ -218,6 +227,20 @@ export async function openFolderPicker(): Promise<SharedDriveFolder | null> {
 
   return new Promise((resolve, reject) => {
     const picker = window.google!.picker!;
+    let settled = false;
+
+    const timeout = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(
+        new Error(
+          'The folder picker did not load. This is usually third-party cookies or trackers ' +
+            'being blocked for accounts.google.com — try allowing them for this site, or a ' +
+            'different browser, then try again.',
+        ),
+      );
+    }, 10000);
+
     try {
       const view = new picker.DocsView(picker.ViewId.FOLDERS)
         .setIncludeFolders(true)
@@ -228,18 +251,27 @@ export async function openFolderPicker(): Promise<SharedDriveFolder | null> {
         .addView(view)
         .setOAuthToken(token)
         .setDeveloperKey(PICKER_API_KEY)
+        .setOrigin(window.location.origin)
         .setTitle('Choose a household folder')
         .setCallback((data: GooglePickerResponse) => {
+          if (settled) return;
           if (data.action === picker.Action.PICKED && data.docs?.[0]) {
+            settled = true;
+            window.clearTimeout(timeout);
             const doc = data.docs[0];
             resolve({ id: doc.id, name: doc.name });
           } else if (data.action === picker.Action.CANCEL) {
+            settled = true;
+            window.clearTimeout(timeout);
             resolve(null);
           }
         })
         .build();
       instance.setVisible(true);
     } catch (err) {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
       reject(err instanceof Error ? err : new Error('Could not open the folder picker.'));
     }
   });
