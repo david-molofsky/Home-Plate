@@ -48,6 +48,29 @@ export function AppLayout() {
           </Stack>
         </ButtonBase>
       )}
+      <Box
+        component="footer"
+        sx={{
+          px: 2,
+          py: 0.75,
+          textAlign: 'center',
+          borderTop: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Typography variant="caption" color="text.secondary">
+          Home Plate — plan meals, dodge repeats, build your shopping list automatically.{' '}
+          <Typography
+            component="a"
+            href={`${import.meta.env.BASE_URL}privacy.html`}
+            variant="caption"
+            color="primary"
+            sx={{ textDecoration: 'none' }}
+          >
+            Privacy Policy
+          </Typography>
+        </Typography>
+      </Box>
       <BottomNav />
     </Box>
   );
