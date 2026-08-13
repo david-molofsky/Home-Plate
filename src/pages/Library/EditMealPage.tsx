@@ -18,10 +18,13 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
+import BarcodeScannerIcon from '@mui/icons-material/BarcodeReader';
 import { db } from '@/services/database/db';
 import { newId } from '@/utils/id';
 import { downscaleImage } from '@/utils/image';
 import { getAisleConfig } from '@/services/aisles/aislesService';
+import { isBarcodeScanAvailable } from '@/utils/barcodeScanSupport';
+import { BarcodeScanDialog } from '@/components/common/BarcodeScanDialog';
 import { CATEGORY_COLORS } from '@/theme/theme';
 import dayjs from 'dayjs';
 import type {
@@ -75,6 +78,17 @@ export function EditMealPage() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const isNew = !mealId;
+
+  // Barcode scanning — feature-detected once on mount rather than per
+  // row, since support depends only on the browser/device, not on
+  // anything about a specific ingredient. scanningIngredientId tracks
+  // which row's scan button was tapped, so the shared dialog knows
+  // which row to fill when a match comes back.
+  const [barcodeScanAvailable, setBarcodeScanAvailable] = useState(false);
+  const [scanningIngredientId, setScanningIngredientId] = useState<string | null>(null);
+  useEffect(() => {
+    void isBarcodeScanAvailable().then(setBarcodeScanAvailable);
+  }, []);
 
   const aisleConfig = useLiveQuery(() => getAisleConfig(), []);
   const visibleAisleOptions = (aisleConfig ?? []).filter((a) => !a.hidden);
@@ -436,6 +450,15 @@ export function EditMealPage() {
                     <IconButton size="small" onClick={() => removeIngredient(ing.id)}>
                       <DeleteOutlineIcon fontSize="small" />
                     </IconButton>
+                    {barcodeScanAvailable && (
+                      <IconButton
+                        size="small"
+                        aria-label="Scan barcode"
+                        onClick={() => setScanningIngredientId(ing.id)}
+                      >
+                        <BarcodeScannerIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </Stack>
 
                   {meal.category === 'both' && (
@@ -608,6 +631,14 @@ export function EditMealPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <BarcodeScanDialog
+        open={scanningIngredientId !== null}
+        onClose={() => setScanningIngredientId(null)}
+        onFill={(name) => {
+          if (scanningIngredientId) updateIngredient(scanningIngredientId, { name });
+        }}
+      />
     </Box>
   );
 }

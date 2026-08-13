@@ -9,6 +9,8 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
+import IconButton from '@mui/material/IconButton';
+import BarcodeScannerIcon from '@mui/icons-material/BarcodeReader';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { generateShoppingList, groupByAisle } from '@/services/mealPlan/mealPlanService';
@@ -16,12 +18,19 @@ import { getAisleConfig } from '@/services/aisles/aislesService';
 import { editMealPath } from '@/routes/paths';
 import type { ShoppingListItem } from '@/models';
 import { newId } from '@/utils/id';
+import { isBarcodeScanAvailable } from '@/utils/barcodeScanSupport';
+import { BarcodeScanDialog } from '@/components/common/BarcodeScanDialog';
 
 export function ShoppingListPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<ShoppingListItem[]>([]);
   const [manualName, setManualName] = useState('');
   const [manualAisle, setManualAisle] = useState<string | null>(null);
+  const [barcodeScanAvailable, setBarcodeScanAvailable] = useState(false);
+  const [scanDialogOpen, setScanDialogOpen] = useState(false);
+  useEffect(() => {
+    void isBarcodeScanAvailable().then(setBarcodeScanAvailable);
+  }, []);
 
   const aisleConfig = useLiveQuery(() => getAisleConfig(), []);
   const visibleAisleOptions = (aisleConfig ?? []).filter((a) => !a.hidden);
@@ -182,8 +191,19 @@ export function ShoppingListPage() {
             </MenuItem>
           ))}
         </TextField>
+        {barcodeScanAvailable && (
+          <IconButton aria-label="Scan barcode" size="small" onClick={() => setScanDialogOpen(true)}>
+            <BarcodeScannerIcon fontSize="small" />
+          </IconButton>
+        )}
         <Button onClick={() => void addManualItem()}>Add</Button>
       </Stack>
+
+      <BarcodeScanDialog
+        open={scanDialogOpen}
+        onClose={() => setScanDialogOpen(false)}
+        onFill={(name) => setManualName(name)}
+      />
     </Box>
   );
 }
