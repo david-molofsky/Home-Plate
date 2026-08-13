@@ -1,22 +1,28 @@
 import { db } from '@/services/database/db';
+import { DEVICE_SETTINGS_KEYS, type SharedDriveFolder } from '@/models';
 
 /**
  * Google Drive integration — adapted from Media Journal's
  * googleDriveService.ts. Uses Google Identity Services (GIS) for OAuth
  * and the `drive.file` scope, so this app can only see files it
- * creates itself — never anything else in the user's Drive.
+ * creates itself — plus, once a household folder is connected via the
+ * Picker below, that one folder too.
  *
  * SETUP REQUIRED before this works:
  *   1. Create a Google Cloud project, enable the Drive API.
  *   2. Create an OAuth 2.0 Client ID (Web application) and add your
  *      app's origin(s) to Authorized JavaScript origins.
  *   3. Put the client ID in .env as VITE_GOOGLE_CLIENT_ID.
+ *   4. For the "connect a shared folder" feature: enable the Google
+ *      Picker API in the same Cloud project, create an API key, and
+ *      put it in .env as VITE_GOOGLE_PICKER_API_KEY.
  * See README.md for the full walkthrough.
  */
 
 const TOKEN_KEY = 'googleDriveToken';
 const FOLDER_NAME = 'Home Plate';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const PICKER_API_KEY = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined;
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 export interface DriveExportFile {
@@ -38,8 +44,42 @@ declare global {
           }): { requestAccessToken: () => void };
         };
       };
+      picker?: {
+        PickerBuilder: new () => GooglePickerBuilder;
+        ViewId: { FOLDERS: string };
+        DocsView: new (viewId: string) => GoogleDocsView;
+        Action: { PICKED: string; CANCEL: string };
+      };
+    };
+    gapi?: {
+      load(api: string, callback: () => void): void;
     };
   }
+}
+
+interface GoogleDocsView {
+  setIncludeFolders(include: boolean): GoogleDocsView;
+  setSelectFolderEnabled(enabled: boolean): GoogleDocsView;
+  setMimeTypes(mimeTypes: string): GoogleDocsView;
+}
+
+interface GooglePickerDoc {
+  id: string;
+  name: string;
+}
+
+interface GooglePickerResponse {
+  action: string;
+  docs?: GooglePickerDoc[];
+}
+
+interface GooglePickerBuilder {
+  addView(view: GoogleDocsView): GooglePickerBuilder;
+  setOAuthToken(token: string): GooglePickerBuilder;
+  setDeveloperKey(key: string): GooglePickerBuilder;
+  setCallback(callback: (data: GooglePickerResponse) => void): GooglePickerBuilder;
+  setTitle(title: string): GooglePickerBuilder;
+  build(): { setVisible(visible: boolean): void };
 }
 
 function loadGisScript(): Promise<void> {
@@ -50,6 +90,29 @@ function loadGisScript(): Promise<void> {
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('Could not load Google Identity Services.'));
+    document.head.appendChild(script);
+  });
+}
+
+function loadPickerScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.google?.picker) return resolve();
+    const start = () => {
+      if (!window.gapi) {
+        reject(new Error('Could not load Google API loader.'));
+        return;
+      }
+      window.gapi.load('picker', () => resolve());
+    };
+    if (window.gapi) {
+      start();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://apis.google.com/js/api.js';
+    script.async = true;
+    script.onload = start;
+    script.onerror = () => reject(new Error('Could not load the Google Picker.'));
     document.head.appendChild(script);
   });
 }
@@ -88,7 +151,7 @@ export async function signOutOfDrive(): Promise<void> {
   await db.deviceSettings.delete(TOKEN_KEY);
 }
 
-async function findOrCreateFolder(token: string): Promise<string> {
+async function findOrCreateOwnFolder(token: string): Promise<string> {
   const query = encodeURIComponent(
     `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
   );
@@ -107,14 +170,90 @@ async function findOrCreateFolder(token: string): Promise<string> {
   return created.id;
 }
 
+/** Resolves which Drive folder Export/Import/List should target on this
+ * device: a shared folder connected via the Picker (see
+ * openFolderPicker/setSharedFolder), if one is set, otherwise this
+ * device's own "Home Plate" folder (created on first use). Checked
+ * fresh on every call rather than cached, since the shared-folder
+ * setting can change between calls (e.g. right after "Change folder"). */
+async function resolveTargetFolder(token: string): Promise<string> {
+  const shared = await getSharedFolder();
+  if (shared) return shared.id;
+  return findOrCreateOwnFolder(token);
+}
+
+/** Reads the currently-connected shared household folder, if this
+ * device has one set. Returns null when using the default (own)
+ * folder. */
+export async function getSharedFolder(): Promise<SharedDriveFolder | null> {
+  const record = await db.deviceSettings.get(DEVICE_SETTINGS_KEYS.sharedDriveFolder);
+  return (record?.value as SharedDriveFolder | undefined) ?? null;
+}
+
+/** Points this device's Export/Import/List at a shared folder instead
+ * of its own default one. Called after a successful Picker selection. */
+export async function setSharedFolder(folder: SharedDriveFolder): Promise<void> {
+  await db.deviceSettings.put({ key: DEVICE_SETTINGS_KEYS.sharedDriveFolder, value: folder });
+}
+
+/** Reverts this device to its own default "Home Plate" folder. */
+export async function clearSharedFolder(): Promise<void> {
+  await db.deviceSettings.delete(DEVICE_SETTINGS_KEYS.sharedDriveFolder);
+}
+
+/** Opens Google's native folder picker, scoped to folders shared with
+ * the signed-in account (Drive handles the actual access control —
+ * this just lets the person point the app at one of them). Requires
+ * VITE_GOOGLE_PICKER_API_KEY; throws a clear error if it's missing
+ * rather than silently failing. Resolves to the chosen folder, or null
+ * if the person closed the picker without choosing one. */
+export async function openFolderPicker(): Promise<SharedDriveFolder | null> {
+  if (!PICKER_API_KEY) {
+    throw new Error(
+      'The folder picker is not configured. Add VITE_GOOGLE_PICKER_API_KEY to your .env file — see README.md.',
+    );
+  }
+  const token = await getToken();
+  await loadPickerScript();
+
+  return new Promise((resolve, reject) => {
+    const picker = window.google!.picker!;
+    try {
+      const view = new picker.DocsView(picker.ViewId.FOLDERS)
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true)
+        .setMimeTypes('application/vnd.google-apps.folder');
+
+      const instance = new picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(token)
+        .setDeveloperKey(PICKER_API_KEY)
+        .setTitle('Choose a household folder')
+        .setCallback((data: GooglePickerResponse) => {
+          if (data.action === picker.Action.PICKED && data.docs?.[0]) {
+            const doc = data.docs[0];
+            resolve({ id: doc.id, name: doc.name });
+          } else if (data.action === picker.Action.CANCEL) {
+            resolve(null);
+          }
+        })
+        .build();
+      instance.setVisible(true);
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error('Could not open the folder picker.'));
+    }
+  });
+}
+
 /** Exports the full local database (meals, planned meals, shopping
- * list, dietary defaults) as a single JSON file in the "Dinner
- * Planner" Drive folder, named by today's date. Overwrites an export
- * from today if one already exists, so repeated exports in a day
- * don't pile up. */
+ * list, dietary defaults) as a single JSON file, named by today's
+ * date, into this device's target folder — either its own "Home
+ * Plate" folder, or a shared household folder if one is connected
+ * (see resolveTargetFolder). Overwrites an export from today if one
+ * already exists, so repeated exports in a day don't pile up. */
 export async function exportToGoogleDrive(): Promise<string> {
   const token = await getToken();
-  const folderId = await findOrCreateFolder(token);
+  const folderId = await resolveTargetFolder(token);
 
   const [meals, plannedMeals, shoppingListItems, appSettings] = await Promise.all([
     db.meals.toArray(),
@@ -158,7 +297,7 @@ export async function exportToGoogleDrive(): Promise<string> {
 
 export async function listDriveExports(): Promise<DriveExportFile[]> {
   const token = await getToken();
-  const folderId = await findOrCreateFolder(token);
+  const folderId = await resolveTargetFolder(token);
   const query = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
   const res = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc`,

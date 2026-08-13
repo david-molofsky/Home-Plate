@@ -208,7 +208,26 @@ export const DEVICE_SETTINGS_KEYS = {
    * export/import like the rest of this table — a timer belongs to
    * whichever device is actually in the kitchen. */
   activeCookingTimer: 'activeCookingTimer',
+  /** Optional override pointing this device's Export/Import at a Drive
+   * folder shared by another household member, instead of the default
+   * folder this device's own account creates for itself (see
+   * services/googleDrive's resolveTargetFolder). Value shape: see
+   * SharedDriveFolder. Device-local like the rest of this table — each
+   * device picks its own target folder independently. */
+  sharedDriveFolder: 'sharedDriveFolder',
 } as const;
+
+/** A Drive folder another household member shared, that this device has
+ * pointed its Export/Import at via the Google Picker (see
+ * services/googleDrive's openFolderPicker). Stored under
+ * DEVICE_SETTINGS_KEYS.sharedDriveFolder. `owner` is best-effort (the
+ * Picker doesn't always return it) and purely for display — it's never
+ * used to decide access, Drive's own sharing permissions handle that. */
+export interface SharedDriveFolder {
+  id: string;
+  name: string;
+  owner?: string;
+}
 
 export interface AppSettingsRecord {
   key: string;

@@ -20,6 +20,8 @@ import GoogleIcon from '@mui/icons-material/Google';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import CloudDownloadOutlinedIcon from '@mui/icons-material/CloudDownloadOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import FolderSharedOutlinedIcon from '@mui/icons-material/FolderSharedOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import dayjs from 'dayjs';
 import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
 import {
@@ -28,6 +30,10 @@ import {
   exportToGoogleDrive,
   listDriveExports,
   importFromDriveFile,
+  openFolderPicker,
+  getSharedFolder,
+  setSharedFolder,
+  clearSharedFolder,
   type DriveExportFile,
 } from '@/services/googleDrive/googleDriveService';
 import { db } from '@/services/database/db';
@@ -53,6 +59,12 @@ export function GoogleDriveSection() {
   const [importOpen, setImportOpen] = useState(false);
   const [driveFiles, setDriveFiles] = useState<DriveExportFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+
+  // Which Drive folder this device's Export/Import targets: null means
+  // "my own Home Plate folder" (the default); set means a folder
+  // another household member shared, connected via the Picker.
+  const sharedFolder = useLiveQuery(() => getSharedFolder(), []);
+  const [folderBusy, setFolderBusy] = useState(false);
 
   const [autoBackupEnabled, setAutoBackupEnabled] = useBooleanSetting(
     DEVICE_SETTINGS_KEYS.autoBackupEnabled,
@@ -110,6 +122,27 @@ export function GoogleDriveSection() {
     }
   };
 
+  const handleConnectFolder = async () => {
+    setFolderBusy(true);
+    setStatus(null);
+    try {
+      const folder = await openFolderPicker();
+      if (folder) {
+        await setSharedFolder(folder);
+        setStatus({ type: 'success', message: `Now using the shared folder "${folder.name}".` });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Could not open the folder picker.' });
+    } finally {
+      setFolderBusy(false);
+    }
+  };
+
+  const handleUseOwnFolder = async () => {
+    await clearSharedFolder();
+    setStatus({ type: 'success', message: 'Back to using your own Home Plate folder.' });
+  };
+
   const handleImportFile = async (file: DriveExportFile) => {
     setImportOpen(false);
     await run(async () => {
@@ -158,6 +191,66 @@ export function GoogleDriveSection() {
               Disconnect
             </Button>
           </Stack>
+
+          <Box sx={{ mt: 3, pt: 2.5, borderTop: 1, borderColor: 'divider' }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+              <FolderSharedOutlinedIcon fontSize="small" />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Household folder
+              </Typography>
+            </Stack>
+
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+              <Typography variant="body2" color="text.secondary">
+                Using: <strong>{sharedFolder ? sharedFolder.name : 'Home Plate'}</strong>
+                {sharedFolder ? ` (shared${sharedFolder.owner ? ` by ${sharedFolder.owner}` : ''})` : ' (your own folder)'}
+              </Typography>
+            </Stack>
+
+            {sharedFolder ? (
+              <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={folderBusy ? <CircularProgress size={14} color="inherit" /> : <FolderSharedOutlinedIcon />}
+                  onClick={handleConnectFolder}
+                  disabled={folderBusy || busy}
+                >
+                  Change folder
+                </Button>
+                <Button size="small" onClick={() => void handleUseOwnFolder()} disabled={folderBusy || busy}>
+                  Use my own folder instead
+                </Button>
+              </Stack>
+            ) : (
+              <>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Want to sync with someone else's device instead of sharing this Google
+                  account?
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={folderBusy ? <CircularProgress size={14} color="inherit" /> : <FolderSharedOutlinedIcon />}
+                  onClick={handleConnectFolder}
+                  disabled={folderBusy || busy}
+                >
+                  Connect a shared folder
+                </Button>
+              </>
+            )}
+
+            <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} alignItems="flex-start">
+              <InfoOutlinedIcon fontSize="small" color="disabled" sx={{ mt: 0.25 }} />
+              <Typography variant="caption" color="text.secondary">
+                How this works: one person exports first — this creates a "Home Plate" folder
+                in their Drive. That person shares the folder with you in Google Drive (normal
+                sharing, outside this app). You then tap "Connect a shared folder" and pick it
+                from the list. From then on, Export/Import on this device use that shared
+                folder.
+              </Typography>
+            </Stack>
+          </Box>
 
           <Box sx={{ mt: 3, pt: 2.5, borderTop: 1, borderColor: 'divider' }}>
             <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
