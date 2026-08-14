@@ -58,7 +58,7 @@ export function LibraryPage() {
         <Button variant="contained" onClick={() => navigate(ROUTES.addMeal)}>
           + Add Meal
         </Button>
-        <Button variant="outlined" onClick={() => navigate(ROUTES.importRecipe)}>
+        <Button variant="contained" onClick={() => navigate(ROUTES.importRecipe)}>
           Import from URL
         </Button>
       </Stack>
