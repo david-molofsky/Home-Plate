@@ -4,13 +4,13 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import Checkbox from '@mui/material/Checkbox';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
-import Link from '@mui/material/Link';
 import IconButton from '@mui/material/IconButton';
 import BarcodeScannerIcon from '@mui/icons-material/BarcodeReader';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { generateShoppingList, groupByAisle } from '@/services/mealPlan/mealPlanService';
@@ -20,6 +20,11 @@ import type { ShoppingListItem } from '@/models';
 import { newId } from '@/utils/id';
 import { isBarcodeScanAvailable } from '@/utils/barcodeScanSupport';
 import { BarcodeScanDialog } from '@/components/common/BarcodeScanDialog';
+import { ShoppingListItemRow } from './ShoppingListItemRow';
+
+/** Key used for the collapse-state map for the "Done" section, kept
+ * distinct from any real aisle id. */
+const DONE_SECTION_KEY = '__done__';
 
 export function ShoppingListPage() {
   const navigate = useNavigate();
@@ -28,6 +33,11 @@ export function ShoppingListPage() {
   const [manualAisle, setManualAisle] = useState<string | null>(null);
   const [barcodeScanAvailable, setBarcodeScanAvailable] = useState(false);
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
+  // Collapse state is per-section (aisle id, or DONE_SECTION_KEY) and
+  // lives only in component state — it intentionally resets to fully
+  // expanded each time the page is opened rather than persisting, to
+  // keep this change scoped to display/interaction only.
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   useEffect(() => {
     void isBarcodeScanAvailable().then(setBarcodeScanAvailable);
   }, []);
@@ -74,6 +84,16 @@ export function ShoppingListPage() {
     setItems(items.map((i) => (i.id === item.id ? updated : i)));
   };
 
+  // Removing an item deletes any persisted row for it (manual items
+  // live in the table permanently; generated items only end up there
+  // if they were ever checked, since toggleChecked persists on write)
+  // and drops it from local state either way, so a generated item
+  // that was never checked is removed just as cleanly.
+  const deleteItem = async (item: ShoppingListItem) => {
+    await db.shoppingListItems.delete(item.id);
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+  };
+
   const addManualItem = async () => {
     if (!manualName.trim() || !manualAisle) return;
     const item: ShoppingListItem = {
@@ -89,7 +109,13 @@ export function ShoppingListPage() {
     setManualName('');
   };
 
-  const grouped = groupByAisle(items);
+  const toggleSection = (key: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const activeItems = items.filter((i) => !i.checked);
+  const doneItems = items.filter((i) => i.checked);
+  const grouped = groupByAisle(activeItems);
 
   // Display order follows the household's configured aisle order (drag
   // order in Settings), not alphabetical. Any aisle id present on an
@@ -102,6 +128,35 @@ export function ShoppingListPage() {
   ];
 
   const aisleLabel = (id: string) => (aisleConfig ?? []).find((a) => a.id === id)?.name ?? id;
+
+  const sectionHeader = (key: string, label: string, count: number, muted = false) => {
+    const collapsed = !!collapsedSections[key];
+    return (
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={0.5}
+        onClick={() => toggleSection(key)}
+        sx={{ cursor: 'pointer', userSelect: 'none', mb: 0.5 }}
+      >
+        {collapsed ? (
+          <ChevronRightIcon fontSize="small" sx={{ color: muted ? 'text.secondary' : 'primary.light' }} />
+        ) : (
+          <ExpandMoreIcon fontSize="small" sx={{ color: muted ? 'text.secondary' : 'primary.light' }} />
+        )}
+        <Typography
+          variant="subtitle2"
+          fontWeight={700}
+          sx={{ color: muted ? 'text.secondary' : 'primary.light' }}
+        >
+          {label}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {count}
+        </Typography>
+      </Stack>
+    );
+  };
 
   return (
     <Box>
@@ -116,59 +171,45 @@ export function ShoppingListPage() {
       {orderedAisleIds.map((aisleId) => {
         const aisleItems = grouped[aisleId];
         if (!aisleItems || aisleItems.length === 0) return null;
+        const collapsed = !!collapsedSections[aisleId];
         return (
           <Box key={aisleId} sx={{ mb: 1.5 }}>
-            <Typography variant="subtitle2" color="primary.light" fontWeight={700} sx={{ mb: 0.5 }}>
-              {aisleLabel(aisleId)}
-            </Typography>
-            <Stack spacing={0.75}>
-              {aisleItems.map((item) => (
-                <Stack key={item.id}>
-                  <Stack direction="row" alignItems="center">
-                    <Checkbox
-                      size="small"
-                      checked={item.checked}
-                      onChange={() => void toggleChecked(item)}
-                    />
-                    <Typography
-                      variant="body2"
-                      sx={{ textDecoration: item.checked ? 'line-through' : 'none' }}
-                    >
-                      {item.name}
-                      {item.quantity ? ` × ${item.quantity}` : ''}
-                    </Typography>
-                  </Stack>
-                  {item.sources && item.sources.length > 0 && (
-                    <Stack sx={{ pl: 5.5 }} spacing={0.25}>
-                      {item.sources.map((source, idx) => (
-                        <Typography
-                          key={`${item.id}-${idx}`}
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ textDecoration: item.checked ? 'line-through' : 'none' }}
-                        >
-                          {source.amount ? `${source.amount} — ` : ''}
-                          <Link
-                            component="button"
-                            variant="caption"
-                            underline="hover"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(editMealPath(source.mealId));
-                            }}
-                          >
-                            {source.mealName}
-                          </Link>
-                        </Typography>
-                      ))}
-                    </Stack>
-                  )}
-                </Stack>
-              ))}
-            </Stack>
+            {sectionHeader(aisleId, aisleLabel(aisleId), aisleItems.length)}
+            {!collapsed && (
+              <Stack spacing={0.25}>
+                {aisleItems.map((item) => (
+                  <ShoppingListItemRow
+                    key={item.id}
+                    item={item}
+                    onToggleChecked={(i) => void toggleChecked(i)}
+                    onDelete={(i) => void deleteItem(i)}
+                    onSourceClick={(mealId) => navigate(editMealPath(mealId))}
+                  />
+                ))}
+              </Stack>
+            )}
           </Box>
         );
       })}
+
+      {doneItems.length > 0 && (
+        <Box sx={{ mb: 1.5, mt: 2, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+          {sectionHeader(DONE_SECTION_KEY, 'Done', doneItems.length, true)}
+          {!collapsedSections[DONE_SECTION_KEY] && (
+            <Stack spacing={0.25}>
+              {doneItems.map((item) => (
+                <ShoppingListItemRow
+                  key={item.id}
+                  item={item}
+                  onToggleChecked={(i) => void toggleChecked(i)}
+                  onDelete={(i) => void deleteItem(i)}
+                  onSourceClick={(mealId) => navigate(editMealPath(mealId))}
+                />
+              ))}
+            </Stack>
+          )}
+        </Box>
+      )}
 
       <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
         <TextField
