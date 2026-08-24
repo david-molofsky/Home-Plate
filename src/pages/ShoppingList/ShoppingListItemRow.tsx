@@ -5,7 +5,15 @@ import Typography from '@mui/material/Typography';
 import Checkbox from '@mui/material/Checkbox';
 import Link from '@mui/material/Link';
 import DeleteIcon from '@mui/icons-material/Delete';
+import dayjs from 'dayjs';
 import type { ShoppingListItem } from '@/models';
+
+/** Renders how long until a checked item auto-removes (24h from
+ * checkedAt), rounding down so it never overstates the time left. */
+function removalCountdown(checkedAt: string): string {
+  const hoursLeft = Math.max(0, 24 - dayjs().diff(dayjs(checkedAt), 'hour'));
+  return hoursLeft <= 1 ? 'less than 1h' : `${hoursLeft}h`;
+}
 
 /** Swipe distance (px) past which releasing the row commits a delete.
  * Matches the wireframe's feel — far enough to avoid accidental
@@ -115,6 +123,11 @@ export function ShoppingListItemRow({
             {item.name}
             {item.quantity ? ` × ${item.quantity}` : ''}
           </Typography>
+          {item.checked && item.checkedAt && (
+            <Typography variant="caption" color="text.secondary" sx={{ pr: 1, flexShrink: 0 }}>
+              Removes in {removalCountdown(item.checkedAt)}
+            </Typography>
+          )}
         </Stack>
         {item.sources && item.sources.length > 0 && (
           <Stack sx={{ pl: 5.5, pb: 0.5 }} spacing={0.25}>

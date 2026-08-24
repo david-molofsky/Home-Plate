@@ -79,8 +79,20 @@ export function ShoppingListPage() {
   }, []);
 
   const toggleChecked = async (item: ShoppingListItem) => {
-    const updated = { ...item, checked: !item.checked };
-    await db.shoppingListItems.put(updated);
+    const nowChecked = !item.checked;
+    const updated: ShoppingListItem = {
+      ...item,
+      checked: nowChecked,
+      checkedAt: nowChecked ? dayjs().toISOString() : undefined,
+    };
+    if (!nowChecked && !item.manual) {
+      // Un-checking a generated (non-manual) item — no need to keep a
+      // persisted row for it, since it'll be rebuilt fresh from the meal
+      // plan on the next load anyway.
+      await db.shoppingListItems.delete(item.id);
+    } else {
+      await db.shoppingListItems.put(updated);
+    }
     setItems(items.map((i) => (i.id === item.id ? updated : i)));
   };
 

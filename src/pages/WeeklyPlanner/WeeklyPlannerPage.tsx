@@ -5,10 +5,11 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
 import Button from '@mui/material/Button';
+import Snackbar from '@mui/material/Snackbar';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { DayCard } from '@/components/planner/DayCard';
-import { getRepeatFlagsForRange } from '@/services/mealPlan/mealPlanService';
+import { generateWeekIdeas, getRepeatFlagsForRange } from '@/services/mealPlan/mealPlanService';
 
 /** This week + this many weeks ahead, all in one continuous scroll (no
  * paging/swiping between weeks). Always opens scrolled to the top —
@@ -35,6 +36,20 @@ export function WeeklyPlannerPage() {
   const allDays = weeks.flat();
 
   const [repeatFlags, setRepeatFlags] = useState<Set<string>>(new Set());
+  const [ideasLoading, setIdeasLoading] = useState(false);
+  const [ideasMessage, setIdeasMessage] = useState<string | null>(null);
+
+  const handleGenerateIdeas = async () => {
+    setIdeasLoading(true);
+    try {
+      const filled = await generateWeekIdeas();
+      setIdeasMessage(
+        filled === 0 ? 'No empty dinner slots to fill this week.' : `Filled ${filled} empty dinner slot${filled === 1 ? '' : 's'}.`,
+      );
+    } finally {
+      setIdeasLoading(false);
+    }
+  };
 
   // Re-run the repeat check whenever planned meals change. useLiveQuery
   // just triggers the recompute here — the actual read happens inside
@@ -57,10 +72,17 @@ export function WeeklyPlannerPage() {
         <Typography variant="h6" fontWeight={700}>
           Plan
         </Typography>
-        <Button size="small" href="/shopping-list">
-          Generate Shopping List
+        <Button size="small" disabled={ideasLoading} onClick={() => void handleGenerateIdeas()}>
+          {ideasLoading ? 'Generating…' : 'Ideas for the week'}
         </Button>
       </Stack>
+
+      <Snackbar
+        open={!!ideasMessage}
+        autoHideDuration={4000}
+        onClose={() => setIdeasMessage(null)}
+        message={ideasMessage}
+      />
 
       {weeks.map((weekDays, weekIndex) => {
         const isCurrentWeek = weekIndex === 0;

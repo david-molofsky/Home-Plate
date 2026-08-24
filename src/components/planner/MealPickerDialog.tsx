@@ -14,6 +14,8 @@ import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Alert from '@mui/material/Alert';
 import Divider from '@mui/material/Divider';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { newId } from '@/utils/id';
@@ -41,14 +43,26 @@ export function MealPickerDialog({ open, onClose, date, mealType, diner }: MealP
   const [size, setSize] = useState<SizeTag | null>(null);
   const [quickAddQuery, setQuickAddQuery] = useState('');
   const [pendingAssign, setPendingAssign] = useState<PendingAssign | null>(null);
+  // "Who's eating" — defaults to whichever slot was tapped, but only
+  // dinner exposes the toggle (breakfast/lunch stay single-serve).
+  // Picking "both" assigns the same meal to the adult and kids dinner
+  // slots for this day in one action.
+  const [selectedDiner, setSelectedDiner] = useState<Diner | 'both'>(diner);
 
   const meals = useLiveQuery(() => db.meals.where('mealType').equals(mealType).toArray(), [mealType]);
 
+  // Which PlannedMeal rows this assignment will actually write.
+  const targetDiners: Diner[] =
+    mealType === 'dinner' ? (selectedDiner === 'both' ? ['adult', 'kids'] : [selectedDiner]) : [diner];
+
   // A meal fits this slot if it's the right mealType and, for dinner,
-  // its category covers this diner ('both' fits either slot).
+  // its category covers the selected diner(s) — "both" shows every
+  // dinner meal, since the user is explicitly choosing to serve it to
+  // both groups regardless of the meal's own tag.
   const fitsSlot = (m: Meal) => {
     if (mealType !== 'dinner') return true;
-    return diner === 'kids' ? m.category === 'kids' || m.category === 'both' : m.category === 'adult' || m.category === 'both';
+    if (selectedDiner === 'both') return true;
+    return selectedDiner === 'kids' ? m.category === 'kids' || m.category === 'both' : m.category === 'adult' || m.category === 'both';
   };
 
   const filtered = useMemo(() => {
@@ -60,7 +74,7 @@ export function MealPickerDialog({ open, onClose, date, mealType, diner }: MealP
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meals, effort, size, mealType, diner]);
+  }, [meals, effort, size, mealType, selectedDiner]);
 
   const query = quickAddQuery.trim();
   const quickMatches = useMemo(() => {
@@ -68,18 +82,31 @@ export function MealPickerDialog({ open, onClose, date, mealType, diner }: MealP
     const q = query.toLowerCase();
     return meals.filter((m) => fitsSlot(m) && m.name.toLowerCase().includes(q)).slice(0, 6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meals, query, mealType, diner]);
+  }, [meals, query, mealType, selectedDiner]);
 
   const hasExactMatch = quickMatches.some((m) => m.name.toLowerCase() === query.toLowerCase());
 
   const finalizeAssign = async (meal: Meal) => {
-    await db.plannedMeals.put({
-      id: newId(),
-      date,
-      mealType,
-      diner,
-      mealId: meal.id,
-    });
+    for (const d of targetDiners) {
+      // Replace anything already in that slot rather than stacking a
+      // second row on top of it — matters when "both" is chosen and one
+      // of the two slots was already filled from elsewhere.
+      const existing = await db.plannedMeals
+        .where('date')
+        .equals(date)
+        .and((p) => p.mealType === mealType && p.diner === d)
+        .toArray();
+      for (const e of existing) {
+        await db.plannedMeals.delete(e.id);
+      }
+      await db.plannedMeals.put({
+        id: newId(),
+        date,
+        mealType,
+        diner: d,
+        mealId: meal.id,
+      });
+    }
     setPendingAssign(null);
     setQuickAddQuery('');
     onClose();
@@ -87,10 +114,12 @@ export function MealPickerDialog({ open, onClose, date, mealType, diner }: MealP
 
   const attemptAssign = async (meal: Meal) => {
     if (mealType === 'dinner') {
-      const conflictDate = await checkRepeatConflict(date, diner, meal.id);
-      if (conflictDate) {
-        setPendingAssign({ meal, conflictDate });
-        return;
+      for (const d of targetDiners) {
+        const conflictDate = await checkRepeatConflict(date, d, meal.id);
+        if (conflictDate) {
+          setPendingAssign({ meal, conflictDate });
+          return;
+        }
       }
     }
     await finalizeAssign(meal);
@@ -104,7 +133,7 @@ export function MealPickerDialog({ open, onClose, date, mealType, diner }: MealP
       name: query,
       mealType,
       dietary: [],
-      category: mealType === 'dinner' && diner === 'kids' ? 'kids' : 'adult',
+      category: mealType === 'dinner' ? (selectedDiner === 'both' ? 'both' : selectedDiner) : 'adult',
       ingredients: [],
       steps: [],
       isQuickAdd: true,
@@ -121,9 +150,30 @@ export function MealPickerDialog({ open, onClose, date, mealType, diner }: MealP
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>
         {mealType[0].toUpperCase() + mealType.slice(1)}
-        {mealType === 'dinner' ? ` — ${diner === 'kids' ? 'Kids' : 'Adult'}` : ''}
+        {mealType === 'dinner'
+          ? ` — ${selectedDiner === 'both' ? 'Both' : selectedDiner === 'kids' ? 'Kids' : 'Adult'}`
+          : ''}
       </DialogTitle>
       <DialogContent>
+        {mealType === 'dinner' && (
+          <Stack sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>
+              Who's eating
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              value={selectedDiner}
+              onChange={(_, val) => val && setSelectedDiner(val)}
+            >
+              <ToggleButton value="adult">Adults</ToggleButton>
+              <ToggleButton value="kids">Kids</ToggleButton>
+              <ToggleButton value="both">Both</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+        )}
+
         <TextField
           label="Quick add"
           placeholder="Type a meal name to search or create…"

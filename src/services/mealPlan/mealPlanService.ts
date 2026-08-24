@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
+import { newId } from '@/utils/id';
 import type { Aisle, Diner, Ingredient, IngredientUnit, Meal, PlannedMeal, ShoppingListItem } from '@/models';
 
 /**
@@ -97,10 +98,32 @@ interface ConsolidationEntry {
  * always render as expanded sub-bullets (one per contributing meal)
  * rather than a collapsed/tap-to-reveal summary. Manual items already
  * in the list are preserved. */
+/** Checked items (manual or generated) are auto-removed this many hours
+ * after they were ticked off, so a re-purchase later in the week starts
+ * from a clean, unchecked line again instead of looking already bought. */
+const CHECKED_ITEM_TTL_HOURS = 24;
+
+/** Deletes any shopping list row that's been checked for longer than
+ * CHECKED_ITEM_TTL_HOURS. Runs at the top of generateShoppingList so it
+ * fires every time the Shopping List page loads — no separate timer or
+ * background job needed. */
+async function purgeExpiredCheckedItems(): Promise<void> {
+  const now = dayjs();
+  const all = await db.shoppingListItems.toArray();
+  const expiredIds = all
+    .filter((i) => i.checked && i.checkedAt && now.diff(dayjs(i.checkedAt), 'hour') >= CHECKED_ITEM_TTL_HOURS)
+    .map((i) => i.id);
+  if (expiredIds.length > 0) {
+    await db.shoppingListItems.bulkDelete(expiredIds);
+  }
+}
+
 export async function generateShoppingList(
   rangeStart: string,
   rangeEnd: string,
 ): Promise<ShoppingListItem[]> {
+  await purgeExpiredCheckedItems();
+
   const planned = await db.plannedMeals
     .where('date')
     .between(rangeStart, rangeEnd, true, true)
@@ -174,9 +197,25 @@ export async function generateShoppingList(
     }
   }
 
-  // Preserve any manually-added items already saved for this range.
-  const existingManual = await db.shoppingListItems.filter((i) => i.manual).toArray();
-  for (const item of existingManual) {
+  // Overlay any persisted checked state onto the freshly-generated
+  // (non-manual) items. Without this, re-running generateShoppingList —
+  // which happens on every Shopping List page load — would rebuild each
+  // generated item from scratch with checked: false, silently undoing a
+  // tick from an earlier visit. Ids are stable (the lowercased
+  // ingredient name), so a lookup by id is enough to reconnect them.
+  const existingAll = await db.shoppingListItems.toArray();
+  const existingById = new Map(existingAll.map((i) => [i.id, i]));
+  for (const [key, item] of aggregated) {
+    const existing = existingById.get(key);
+    if (existing?.checked) {
+      aggregated.set(key, { ...item, checked: true, checkedAt: existing.checkedAt });
+    }
+  }
+
+  // Preserve any manually-added items already saved for this range —
+  // these don't correspond to any generated ingredient bucket, so they
+  // wouldn't otherwise appear in `aggregated` at all.
+  for (const item of existingAll.filter((i) => i.manual)) {
     aggregated.set(item.id, item);
   }
 
@@ -254,6 +293,65 @@ export async function checkRepeatConflict(
 async function findDinnerEntry(date: string, diner: Diner): Promise<PlannedMeal | undefined> {
   const rows = await db.plannedMeals.where('date').equals(date).toArray();
   return rows.find((p) => p.mealType === 'dinner' && p.diner === diner);
+}
+
+function shuffled<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+/** Fills only empty dinner slots — adult and kids independently — across
+ * the current rolling 7-day window (today through +6 days) with a
+ * random Library meal that fits that slot's diner category. Never
+ * touches a slot that's already assigned. For each empty slot, tries
+ * candidate meals in random order and skips any that would land within
+ * 7 days of themselves for that diner (same check the manual picker
+ * uses); if every candidate conflicts, that slot is left empty rather
+ * than forcing a repeat. Returns how many slots got filled. */
+export async function generateWeekIdeas(): Promise<number> {
+  const today = dayjs();
+  const dates = Array.from({ length: 7 }, (_, d) => today.add(d, 'day').format('YYYY-MM-DD'));
+
+  const dinnerMeals = await db.meals.where('mealType').equals('dinner').toArray();
+  const mealsForDiner = (diner: Diner) =>
+    dinnerMeals.filter((m) =>
+      diner === 'kids' ? m.category === 'kids' || m.category === 'both' : m.category === 'adult' || m.category === 'both',
+    );
+
+  let filled = 0;
+
+  for (const date of dates) {
+    for (const diner of ['adult', 'kids'] as Diner[]) {
+      const existing = await findDinnerEntry(date, diner);
+      if (existing) continue;
+
+      const candidates = shuffled(mealsForDiner(diner));
+      let chosen: Meal | undefined;
+      for (const candidate of candidates) {
+        const conflict = await checkRepeatConflict(date, diner, candidate.id);
+        if (!conflict) {
+          chosen = candidate;
+          break;
+        }
+      }
+      if (!chosen) continue;
+
+      await db.plannedMeals.put({
+        id: newId(),
+        date,
+        mealType: 'dinner',
+        diner,
+        mealId: chosen.id,
+      });
+      filled++;
+    }
+  }
+
+  return filled;
 }
 
 /** Swaps dinner between two dates — adult and kids independently.

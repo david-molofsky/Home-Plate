@@ -168,6 +168,10 @@ export interface ShoppingListItem {
    * meal, always rendered expanded rather than collapsed/tap-to-reveal.
    * Mutually exclusive with `quantity`. */
   sources?: ShoppingListItemSource[];
+  /** ISO timestamp set the moment `checked` flips to true, cleared when
+   * unchecked. Drives the 24h auto-removal window — see
+   * purgeExpiredCheckedItems in mealPlanService. */
+  checkedAt?: string;
 }
 
 /** Shared household settings — stored in appSettings, which is included
