@@ -42,13 +42,23 @@ export function SchoolLunchMenuEditPage() {
   const [loaded, setLoaded] = useState(isNew);
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteBreak, setConfirmDeleteBreak] = useState<string | null>(null);
+  // Free-text mirror of menu.cycleWeeks, so the field can sit empty or
+  // mid-edit (e.g. after backspacing the "1") without every keystroke
+  // snapping it back to the clamped value — that immediate-clamp
+  // behaviour was what made it impossible to clear on mobile, where
+  // there's no up/down spinner to fall back on. Clamping + resizing
+  // the day grid only happens once the field is committed (blur).
+  const [cycleWeeksInput, setCycleWeeksInput] = useState(() => String(isNew ? emptyMenu().cycleWeeks : ''));
 
   // Mirrors EditMealPage's pattern: for an existing menu, load it into
   // local state once via effect rather than during render.
   useEffect(() => {
     if (!isNew && menuId) {
       void getMenu(menuId).then((m) => {
-        if (m) setMenu(m);
+        if (m) {
+          setMenu(m);
+          setCycleWeeksInput(String(m.cycleWeeks));
+        }
         setLoaded(true);
       });
     }
@@ -65,9 +75,19 @@ export function SchoolLunchMenuEditPage() {
     );
   }
 
-  const handleCycleWeeksChange = (value: string) => {
-    const parsed = clampCycleWeeks(Number(value));
-    setMenu({ ...menu, cycleWeeks: parsed, days: resizeCycleDays(menu.days, parsed) });
+  // While typing: accept anything digit-like (including empty, mid-
+  // backspace) without touching menu state yet.
+  const handleCycleWeeksInput = (value: string) => {
+    if (value === '' || /^\d+$/.test(value)) setCycleWeeksInput(value);
+  };
+
+  // On blur (or Enter): commit whatever's there, clamped to 1–40, and
+  // resize the day grid to match. Falls back to the last valid value
+  // if the field was left empty.
+  const commitCycleWeeks = () => {
+    const parsed = clampCycleWeeks(cycleWeeksInput === '' ? menu.cycleWeeks : Number(cycleWeeksInput));
+    setCycleWeeksInput(String(parsed));
+    setMenu((m) => ({ ...m, cycleWeeks: parsed, days: resizeCycleDays(m.days, parsed) }));
   };
 
   const updateCell = (weekIndex: number, dayIndex: number, value: string) => {
@@ -152,8 +172,12 @@ export function SchoolLunchMenuEditPage() {
           <TextField
             label="Cycle length (weeks)"
             type="number"
-            value={menu.cycleWeeks}
-            onChange={(e) => handleCycleWeeksChange(e.target.value)}
+            value={cycleWeeksInput}
+            onChange={(e) => handleCycleWeeksInput(e.target.value)}
+            onBlur={commitCycleWeeks}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            }}
             inputProps={{ min: 1, max: MAX_SCHOOL_LUNCH_CYCLE_WEEKS }}
             helperText={`1–${MAX_SCHOOL_LUNCH_CYCLE_WEEKS}`}
             sx={{ flex: 1 }}
