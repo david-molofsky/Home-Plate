@@ -1,5 +1,13 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Meal, PlannedMeal, ShoppingListItem, AppSettingsRecord } from '@/models';
+import type {
+  Meal,
+  PlannedMeal,
+  ShoppingListItem,
+  AppSettingsRecord,
+  Kid,
+  SchoolLunchMenu,
+  SchoolLunchOverride,
+} from '@/models';
 
 /**
  * Local IndexedDB store via Dexie. No live backend — household members
@@ -15,6 +23,14 @@ class HomePlateDB extends Dexie {
    * device's auto-backup preference/timestamp). Excluded from Dexie
    * Cloud sync via `unsyncedTables` below. */
   deviceSettings!: EntityTable<AppSettingsRecord, 'key'>;
+  /** Household kids — used only to assign/label school lunch menus. */
+  kids!: EntityTable<Kid, 'id'>;
+  /** Repeating school lunch cycles, one per school/kid — see
+   * services/schoolLunch/schoolLunchService. */
+  schoolLunchMenus!: EntityTable<SchoolLunchMenu, 'id'>;
+  /** Single-day manual overrides of a kid's school lunch display,
+   * keyed `${date}:${kidId}` — see schoolLunchService. */
+  schoolLunchOverrides!: EntityTable<SchoolLunchOverride, 'id'>;
 
   constructor() {
     super('homePlateDB');
@@ -71,6 +87,19 @@ class HomePlateDB extends Dexie {
             delete meal.wouldMakeAgain;
           });
       });
+    // v5: adds the School Lunch Menus feature — kids, repeating menu
+    // cycles, and per-day overrides. All three tables are brand new, so
+    // this is purely additive and needs no upgrade() function.
+    this.version(5).stores({
+      meals: 'id, mealType, category, name, isQuickAdd, realmId',
+      plannedMeals: 'id, date, mealType, diner, mealId, realmId',
+      shoppingListItems: 'id, aisle, checked, realmId',
+      appSettings: 'key, realmId',
+      deviceSettings: 'key',
+      kids: 'id, name',
+      schoolLunchMenus: 'id, kidId, name',
+      schoolLunchOverrides: 'id, date, kidId',
+    });
   }
 }
 

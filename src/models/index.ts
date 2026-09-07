@@ -195,6 +195,9 @@ export const SETTINGS_KEYS = {
   colorMode: 'colorMode',
   dietaryDefaults: 'dietaryDefaults',
   aisles: 'aislesConfig',
+  /** SchoolLunchException[] that apply to every school lunch menu at
+   * once (e.g. winter break) — see services/schoolLunch. */
+  schoolLunchHolidays: 'schoolLunchHolidays',
 } as const;
 
 /** Device-local settings — stored in deviceSettings, which is
@@ -236,4 +239,71 @@ export interface SharedDriveFolder {
 export interface AppSettingsRecord {
   key: string;
   value: unknown;
+}
+
+// ---- School lunch menus ----
+
+/** A household kid, used only to assign school lunch menus and label
+ * the per-kid rows on the Planner/Calendar. Deliberately minimal (just
+ * a name) — nothing else in the app needs a fuller "kid" concept yet. */
+export interface Kid {
+  id: string;
+  name: string;
+  createdAt: string; // ISO
+}
+
+/** A non-school date or date range — either a single `date`, or an
+ * inclusive `startDate`/`endDate` range (e.g. half term), never both.
+ * Ranges are matched against weekdays only, so there's no need to mark
+ * weekends inside a range. Used both per-menu (that school's own
+ * breaks) and household-wide (SETTINGS_KEYS.schoolLunchHolidays, which
+ * applies to every menu at once). */
+export interface SchoolLunchException {
+  id: string;
+  date?: string; // YYYY-MM-DD
+  startDate?: string; // YYYY-MM-DD, inclusive
+  endDate?: string; // YYYY-MM-DD, inclusive
+  label?: string; // e.g. "Half Term", "Thanksgiving"
+}
+
+/** Sentinel SchoolLunchMenu.kidId meaning "every kid" — for households
+ * where siblings share a school and eat the same lunch, so one menu
+ * covers all of them instead of duplicating identical cycles. */
+export const ALL_KIDS = 'all';
+
+/** Cap on cycle length — long enough for any real rotation without the
+ * cycle editor becoming unusable. */
+export const MAX_SCHOOL_LUNCH_CYCLE_WEEKS = 40;
+
+/** A repeating school lunch menu, entered once and auto-filled into
+ * the Kids Lunch slot on school days going forward. `startDate`
+ * anchors "week 1" of the cycle; which week/day applies to any given
+ * date is computed from the gap since then (see
+ * services/schoolLunch/schoolLunchService's resolveCycleText) — the
+ * cycle keeps repeating indefinitely with no re-entry needed. */
+export interface SchoolLunchMenu {
+  id: string;
+  name: string; // school/menu name, e.g. "Lincoln Elementary"
+  kidId: string; // a Kid.id, or ALL_KIDS
+  cycleWeeks: number; // 1-MAX_SCHOOL_LUNCH_CYCLE_WEEKS
+  startDate: string; // YYYY-MM-DD
+  /** days[weekIndex][weekday], weekday 0=Mon..4=Fri. Free-text menu
+   * item per cell; blank = nothing entered for that day. */
+  days: string[][];
+  exceptions: SchoolLunchException[];
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+}
+
+/** A single-day manual override for a kid's school lunch display,
+ * independent of the underlying cycle — created via "Edit" on the
+ * Planner day view without touching the cycle definition itself. An
+ * empty `text` explicitly means "no lunch entry today" (distinct from
+ * having no override at all, which falls through to the cycle). Keyed
+ * as `${date}:${kidId}` so there's at most one per kid per day. */
+export interface SchoolLunchOverride {
+  id: string; // `${date}:${kidId}`
+  date: string; // YYYY-MM-DD
+  kidId: string;
+  text: string;
 }

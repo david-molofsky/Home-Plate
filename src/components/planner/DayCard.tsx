@@ -17,6 +17,8 @@ import dayjs from 'dayjs';
 import { db } from '@/services/database/db';
 import { MealPickerDialog } from '@/components/planner/MealPickerDialog';
 import { SwapDaysDialog } from '@/components/planner/SwapDaysDialog';
+import { SchoolLunchRow } from '@/components/planner/SchoolLunchRow';
+import { getLunchDisplaysForDate } from '@/services/schoolLunch/schoolLunchService';
 import type { Diner, MealType, PlannedMeal } from '@/models';
 
 interface DayCardProps {
@@ -50,6 +52,12 @@ export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
   const mealIds = [...new Set((planned ?? []).map((p) => p.mealId))];
   const meals = useLiveQuery(() => db.meals.bulkGet(mealIds), [mealIds.join(',')]);
   const mealById = new Map((meals ?? []).filter(Boolean).map((m) => [m!.id, m!]));
+
+  // School lunch is a separate, read-only-except-for-Edit display per
+  // kid — independent of the shared single Lunch slot above, since
+  // breakfast/lunch stay single-serve meals in the core model. Only
+  // kids with an assigned menu show up here at all.
+  const schoolLunches = useLiveQuery(() => getLunchDisplaysForDate(date), [date]) ?? [];
 
   const findEntry = (mealType: MealType, diner: Diner): PlannedMeal | undefined =>
     (planned ?? []).find((p) => p.mealType === mealType && p.diner === diner);
@@ -158,6 +166,9 @@ export function DayCard({ date, repeatFlags, weekDays }: DayCardProps) {
 
       {(breakfast || showBreakfast) && renderSlotRow('Breakfast', breakfast, 'breakfast', 'adult')}
       {(lunch || showLunch) && renderSlotRow('Lunch', lunch, 'lunch', 'adult')}
+      {schoolLunches.map((display) => (
+        <SchoolLunchRow key={display.kidId} date={date} display={display} />
+      ))}
 
       <Stack direction="row" spacing={1} sx={{ py: 0.5 }}>
         <Typography variant="caption" color="text.secondary" sx={{ width: 60, textTransform: 'uppercase', flexShrink: 0 }}>

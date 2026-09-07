@@ -14,6 +14,7 @@ import { ImportRecipePage } from '@/pages/Library/ImportRecipePage';
 import { CookingModePage } from '@/pages/Library/CookingModePage';
 import { ShoppingListPage } from '@/pages/ShoppingList/ShoppingListPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
+import { SchoolLunchMenuEditPage } from '@/pages/Settings/SchoolLunchMenuEditPage';
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
                 <Route path="/library/:mealId/view" element={<MealDetailPage />} />
                 <Route path="/shopping-list" element={<ShoppingListPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/school-lunch/:menuId" element={<SchoolLunchMenuEditPage />} />
               </Route>
             </Routes>
           </HashRouter>

@@ -4,6 +4,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { GoogleDriveSection } from '@/components/settings/GoogleDriveSection';
 import { DietaryDefaultsSection } from '@/components/settings/DietaryDefaultsSection';
 import { GroceryAislesSection } from '@/components/settings/GroceryAislesSection';
+import { SchoolLunchSection } from '@/components/settings/SchoolLunchSection';
 import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
 import { PwaUpdateSection } from '@/components/settings/PwaUpdateSection';
 
@@ -16,6 +17,7 @@ export function SettingsPage() {
       <GoogleDriveSection />
       <DietaryDefaultsSection />
       <GroceryAislesSection />
+      <SchoolLunchSection />
 
       <CollapsibleSection title="About" icon={InfoOutlinedIcon}>
         <Typography variant="body2" color="text.secondary">

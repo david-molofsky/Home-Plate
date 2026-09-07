@@ -9,6 +9,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import dayjs, { type Dayjs } from 'dayjs';
 import { db } from '@/services/database/db';
 import { getRepeatFlagsForRange } from '@/services/mealPlan/mealPlanService';
+import { getLunchDisplaysForRange } from '@/services/schoolLunch/schoolLunchService';
 import { MealPickerDialog } from '@/components/planner/MealPickerDialog';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -39,6 +40,14 @@ export function CalendarPage() {
   useMemo(() => {
     void getRepeatFlagsForRange(rangeStart, rangeEnd).then(setRepeatFlags);
   }, [rangeStart, rangeEnd, planned?.length]);
+
+  // One teal badge per kid with a resolved (non-blank) school lunch
+  // that day — see schoolLunchService.getLunchDisplaysForRange, which
+  // resolves the whole visible grid in one pass rather than per cell.
+  const lunchByDate = useLiveQuery(
+    () => getLunchDisplaysForRange(rangeStart, rangeEnd),
+    [rangeStart, rangeEnd],
+  );
 
   const plannedByDate = new Map<string, typeof planned>();
   (planned ?? []).forEach((p) => {
@@ -83,6 +92,7 @@ export function CalendarPage() {
           const entries = plannedByDate.get(dateStr) ?? [];
           const dinnerAdult = entries.find((e) => e.mealType === 'dinner' && e.diner === 'adult');
           const hasWarn = entries.some((e) => repeatFlags.has(e.id));
+          const lunchCount = (lunchByDate?.get(dateStr) ?? []).filter((d) => d.text).length;
           return (
             <Box
               key={dateStr}
@@ -134,6 +144,25 @@ export function CalendarPage() {
                     bgcolor: 'warning.main',
                   }}
                 />
+              )}
+              {lunchCount > 0 && (
+                <Stack
+                  direction="row"
+                  spacing={0.3}
+                  sx={{ position: 'absolute', bottom: 3, left: 3 }}
+                >
+                  {Array.from({ length: lunchCount }).map((_, i) => (
+                    <Box
+                      key={i}
+                      sx={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: '50%',
+                        bgcolor: 'secondary.main',
+                      }}
+                    />
+                  ))}
+                </Stack>
               )}
             </Box>
           );

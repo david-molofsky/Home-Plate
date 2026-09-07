@@ -9,10 +9,16 @@ export const ROUTES = {
   cookingMode: '/library/:mealId/cook',
   shoppingList: '/shopping-list',
   settings: '/settings',
+  schoolLunchMenu: '/settings/school-lunch/:menuId',
 } as const;
 
 export function editMealPath(mealId: string) {
   return `/library/${mealId}`;
+}
+
+/** Pass 'new' to open the editor for a brand-new menu. */
+export function schoolLunchMenuPath(menuId: string) {
+  return `/settings/school-lunch/${menuId}`;
 }
 
 export function mealDetailPath(mealId: string) {

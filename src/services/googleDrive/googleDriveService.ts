@@ -278,23 +278,37 @@ export async function openFolderPicker(): Promise<SharedDriveFolder | null> {
 }
 
 /** Exports the full local database (meals, planned meals, shopping
- * list, dietary defaults) as a single JSON file, named by today's
- * date, into this device's target folder — either its own "Home
- * Plate" folder, or a shared household folder if one is connected
- * (see resolveTargetFolder). Overwrites an export from today if one
- * already exists, so repeated exports in a day don't pile up. */
+ * list, dietary defaults, kids, and school lunch menus/overrides) as a
+ * single JSON file, named by today's date, into this device's target
+ * folder — either its own "Home Plate" folder, or a shared household
+ * folder if one is connected (see resolveTargetFolder). Overwrites an
+ * export from today if one already exists, so repeated exports in a
+ * day don't pile up. */
 export async function exportToGoogleDrive(): Promise<string> {
   const token = await getToken();
   const folderId = await resolveTargetFolder(token);
 
-  const [meals, plannedMeals, shoppingListItems, appSettings] = await Promise.all([
-    db.meals.toArray(),
-    db.plannedMeals.toArray(),
-    db.shoppingListItems.toArray(),
-    db.appSettings.toArray(),
-  ]);
+  const [meals, plannedMeals, shoppingListItems, appSettings, kids, schoolLunchMenus, schoolLunchOverrides] =
+    await Promise.all([
+      db.meals.toArray(),
+      db.plannedMeals.toArray(),
+      db.shoppingListItems.toArray(),
+      db.appSettings.toArray(),
+      db.kids.toArray(),
+      db.schoolLunchMenus.toArray(),
+      db.schoolLunchOverrides.toArray(),
+    ]);
   const payload = JSON.stringify(
-    { exportedAt: new Date().toISOString(), meals, plannedMeals, shoppingListItems, appSettings },
+    {
+      exportedAt: new Date().toISOString(),
+      meals,
+      plannedMeals,
+      shoppingListItems,
+      appSettings,
+      kids,
+      schoolLunchMenus,
+      schoolLunchOverrides,
+    },
     null,
     2,
   );
@@ -339,8 +353,10 @@ export async function listDriveExports(): Promise<DriveExportFile[]> {
   return (data.files ?? []) as DriveExportFile[];
 }
 
-/** Imports a Drive export, adding meals/planned entries that don't
- * already exist locally (matched by id) rather than overwriting
+/** Imports a Drive export, adding meals/planned entries (and kids,
+ * school lunch menus/overrides, and any shared appSettings keys this
+ * device doesn't already have) that don't already exist locally
+ * (matched by id, or by key for appSettings) rather than overwriting
  * everything — safer for merging between household members. */
 export async function importFromDriveFile(
   fileId: string,
@@ -367,6 +383,44 @@ export async function importFromDriveFile(
     if (exists) skipped++;
     else {
       await db.plannedMeals.put(planned);
+      imported++;
+    }
+  }
+  for (const kid of data.kids ?? []) {
+    const exists = await db.kids.get(kid.id);
+    if (exists) skipped++;
+    else {
+      await db.kids.put(kid);
+      imported++;
+    }
+  }
+  for (const menu of data.schoolLunchMenus ?? []) {
+    const exists = await db.schoolLunchMenus.get(menu.id);
+    if (exists) skipped++;
+    else {
+      await db.schoolLunchMenus.put(menu);
+      imported++;
+    }
+  }
+  for (const override of data.schoolLunchOverrides ?? []) {
+    const exists = await db.schoolLunchOverrides.get(override.id);
+    if (exists) skipped++;
+    else {
+      await db.schoolLunchOverrides.put(override);
+      imported++;
+    }
+  }
+  // appSettings holds single shared blobs (aisles, dietary defaults,
+  // and now household school-lunch holidays) rather than per-id
+  // records, so these merge by key: only fill in a key this device
+  // doesn't have yet, never overwrite a local value that already
+  // exists — same "don't clobber" spirit as the id-matched tables
+  // above.
+  for (const setting of data.appSettings ?? []) {
+    const exists = await db.appSettings.get(setting.key);
+    if (exists) skipped++;
+    else {
+      await db.appSettings.put(setting);
       imported++;
     }
   }
