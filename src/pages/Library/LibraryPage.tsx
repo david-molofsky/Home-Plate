@@ -64,12 +64,15 @@ export function LibraryPage() {
         )}
       </Stack>
 
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <Button variant="contained" onClick={() => navigate(ROUTES.addMeal)}>
           + Add Meal
         </Button>
         <Button variant="contained" onClick={() => navigate(ROUTES.importRecipe)}>
           Import from URL
+        </Button>
+        <Button variant="contained" onClick={() => navigate(ROUTES.importPhoto)}>
+          Import from Photo
         </Button>
       </Stack>
 

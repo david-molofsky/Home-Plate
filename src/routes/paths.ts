@@ -4,6 +4,7 @@ export const ROUTES = {
   library: '/library',
   addMeal: '/library/new',
   importRecipe: '/library/import',
+  importPhoto: '/library/import-photo',
   editMeal: '/library/:mealId',
   mealDetail: '/library/:mealId/view',
   cookingMode: '/library/:mealId/cook',

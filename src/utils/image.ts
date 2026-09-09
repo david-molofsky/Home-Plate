@@ -1,6 +1,14 @@
 const MAX_EDGE = 300;
 const JPEG_QUALITY = 0.7;
 
+// Cap used only when preparing a photo for on-device OCR (see
+// prepareImageForOcr, used by photo recipe import) — much larger than
+// the 300px meal-photo thumbnail above, since the text itself needs to
+// stay legible. Still capped rather than left at full camera
+// resolution (often 3000px+), which would slow the on-device OCR
+// engine and risk running out of memory on lower-end phones.
+const OCR_MAX_EDGE = 2000;
+
 /**
  * Downscales an uploaded image client-side before it's ever written to
  * Dexie/IndexedDB. Thumbnails only render at ~60px, so storing
@@ -11,17 +19,23 @@ const JPEG_QUALITY = 0.7;
  *
  * Returns a data URL ready to store directly on Meal.photo.
  */
-// Shared resize step used by both downscaleImage (File input) and
-// downscaleImageFromUrl (recipe URL import's photo) so the two entry
-// points can't drift out of sync on sizing/quality.
-function resizeToDataUrl(img: HTMLImageElement): string {
+// Shared resize step, parameterized by max edge / output format so
+// downscaleImage, downscaleImageFromUrl, and prepareImageForOcr can't
+// drift out of sync on the actual resize math even though they target
+// different sizes and formats.
+function resizeToDataUrlWith(
+  img: HTMLImageElement,
+  maxEdge: number,
+  mimeType: string,
+  quality?: number,
+): string {
   let { width, height } = img;
-  if (width > height && width > MAX_EDGE) {
-    height = Math.round((height * MAX_EDGE) / width);
-    width = MAX_EDGE;
-  } else if (height >= width && height > MAX_EDGE) {
-    width = Math.round((width * MAX_EDGE) / height);
-    height = MAX_EDGE;
+  if (width > height && width > maxEdge) {
+    height = Math.round((height * maxEdge) / width);
+    width = maxEdge;
+  } else if (height >= width && height > maxEdge) {
+    width = Math.round((width * maxEdge) / height);
+    height = maxEdge;
   }
 
   const canvas = document.createElement('canvas');
@@ -32,7 +46,11 @@ function resizeToDataUrl(img: HTMLImageElement): string {
     throw new Error('Canvas not supported on this device.');
   }
   ctx.drawImage(img, 0, 0, width, height);
-  return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+  return canvas.toDataURL(mimeType, quality);
+}
+
+function resizeToDataUrl(img: HTMLImageElement): string {
+  return resizeToDataUrlWith(img, MAX_EDGE, 'image/jpeg', JPEG_QUALITY);
 }
 
 export function downscaleImage(file: File): Promise<string> {
@@ -77,5 +95,35 @@ export function downscaleImageFromUrl(imageUrl: string): Promise<string> {
       }
     };
     img.src = imageUrl;
+  });
+}
+
+/**
+ * Resizes an uploaded photo for on-device OCR (see
+ * services/recipeImport/photoImportService) rather than for storage —
+ * capped at OCR_MAX_EDGE (much larger than the ~300px meal-photo
+ * thumbnail) so the recipe text itself stays legible, and encoded as
+ * PNG rather than JPEG to avoid compression artefacts blurring
+ * character edges. Only downscales if the source exceeds the cap;
+ * never upscales a smaller photo. The resulting data URL is used only
+ * to feed the OCR engine — it's discarded afterwards, not stored.
+ */
+export function prepareImageForOcr(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the selected file.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not decode the selected file as an image.'));
+      img.onload = () => {
+        try {
+          resolve(resizeToDataUrlWith(img, OCR_MAX_EDGE, 'image/png'));
+        } catch (err) {
+          reject(err as Error);
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
   });
 }

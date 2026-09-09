@@ -60,4 +60,21 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // tesseract.js (photo recipe import's on-device OCR engine) is
+        // a CommonJS package, and Rollup's default chunking doesn't
+        // reliably split dynamically-imported CJS modules out of the
+        // main bundle the way it does for ESM — without this, its ~700KB
+        // ends up inlined into the app's initial load for every visitor,
+        // even ones who never use photo import. Forcing it into its own
+        // named chunk keeps it lazy: only fetched the first time someone
+        // actually taps "Choose Photo" on the Import from Photo page.
+        manualChunks: {
+          tesseract: ['tesseract.js'],
+        },
+      },
+    },
+  },
 });
