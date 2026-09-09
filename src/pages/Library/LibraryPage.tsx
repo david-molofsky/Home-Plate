@@ -8,12 +8,16 @@ import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import Avatar from '@mui/material/Avatar';
+import IconButton from '@mui/material/IconButton';
+import Snackbar from '@mui/material/Snackbar';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
+import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import { useNavigate } from 'react-router-dom';
 import { db } from '@/services/database/db';
+import { shareMeal } from '@/services/share/mealShareService';
 import { ROUTES, mealDetailPath } from '@/routes/paths';
 import { CATEGORY_COLORS } from '@/theme/theme';
-import type { MealType } from '@/models';
+import type { Meal, MealType } from '@/models';
 
 const TYPE_FILTERS: (MealType | 'all')[] = ['all', 'breakfast', 'lunch', 'dinner'];
 
@@ -21,12 +25,18 @@ export function LibraryPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<MealType | 'all'>('all');
   const [quickOnly, setQuickOnly] = useState(false);
+  const [copiedOpen, setCopiedOpen] = useState(false);
 
   const meals = useLiveQuery(() => db.meals.orderBy('name').toArray(), []);
   const quickAddCount = (meals ?? []).filter((m) => m.isQuickAdd).length;
   const filtered = (meals ?? []).filter(
     (m) => (filter === 'all' || m.mealType === filter) && (!quickOnly || m.isQuickAdd),
   );
+
+  const handleShare = async (meal: Meal) => {
+    const result = await shareMeal(meal);
+    if (result === 'copied') setCopiedOpen(true);
+  };
 
   return (
     <Box>
@@ -70,8 +80,8 @@ export function LibraryPage() {
       ) : (
         <Stack spacing={1.5}>
           {filtered.map((meal) => (
-            <Card key={meal.id}>
-              <CardActionArea onClick={() => navigate(mealDetailPath(meal.id))} sx={{ p: 1.5 }}>
+            <Card key={meal.id} sx={{ position: 'relative' }}>
+              <CardActionArea onClick={() => navigate(mealDetailPath(meal.id))} sx={{ p: 1.5, pr: 5 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Stack direction="row" spacing={1.5} alignItems="center">
                     <Avatar
@@ -105,10 +115,35 @@ export function LibraryPage() {
                   ))}
                 </Stack>
               </CardActionArea>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleShare(meal);
+                }}
+                aria-label={`Share ${meal.name}`}
+                sx={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  bgcolor: 'background.paper',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+              >
+                <ShareOutlinedIcon fontSize="small" />
+              </IconButton>
             </Card>
           ))}
         </Stack>
       )}
+
+      <Snackbar
+        open={copiedOpen}
+        autoHideDuration={2500}
+        onClose={() => setCopiedOpen(false)}
+        message="Link copied!"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   );
 }

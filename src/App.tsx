@@ -15,6 +15,7 @@ import { CookingModePage } from '@/pages/Library/CookingModePage';
 import { ShoppingListPage } from '@/pages/ShoppingList/ShoppingListPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
 import { SchoolLunchMenuEditPage } from '@/pages/Settings/SchoolLunchMenuEditPage';
+import { SharedMealPage } from '@/pages/Shared/SharedMealPage';
 
 export default function App() {
   return (
@@ -28,6 +29,11 @@ export default function App() {
                   outside AppLayout so it renders without the normal
                   header/bottom nav chrome. */}
               <Route path="/library/:mealId/cook" element={<CookingModePage />} />
+              {/* Shared meal links are public and self-contained (the
+                  recipe is decoded from the URL itself) — also outside
+                  AppLayout, since whoever opens the link may never have
+                  used Home Plate before. */}
+              <Route path="/shared/:payload" element={<SharedMealPage />} />
               <Route element={<AppLayout />}>
                 <Route path="/" element={<WeeklyPlannerPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />

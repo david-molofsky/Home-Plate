@@ -1,84 +1,86 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
 import Divider from '@mui/material/Divider';
-import Snackbar from '@mui/material/Snackbar';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
-import { db } from '@/services/database/db';
-import { shareMeal } from '@/services/share/mealShareService';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import { decodeSharedMeal, importSharedMeal } from '@/services/share/mealShareService';
 import { CATEGORY_COLORS } from '@/theme/theme';
-import { ROUTES, editMealPath, cookingModePath } from '@/routes/paths';
+import { ROUTES, mealDetailPath } from '@/routes/paths';
 import type { Ingredient } from '@/models';
 
 const CATEGORY_LABEL = { adult: 'Adults', kids: 'Kids', both: 'Both' } as const;
 
-export function MealDetailPage() {
-  const { mealId } = useParams();
+/** Public, read-only view for a shared meal link — deliberately
+ * outside AppLayout (no bottom nav / settings icon) since whoever
+ * opens this link may never have used Home Plate before. Works purely
+ * from the URL: the recipe is decoded client-side from the link
+ * itself, so viewing it needs no household data and no network
+ * request. The one write this page can do is "Add to my library",
+ * which saves straight into whichever browser/device opened the
+ * link. */
+export function SharedMealPage() {
+  const { payload } = useParams();
   const navigate = useNavigate();
-  const meal = useLiveQuery(() => (mealId ? db.meals.get(mealId) : undefined), [mealId]);
-  const [copiedOpen, setCopiedOpen] = useState(false);
+  const decoded = payload ? decodeSharedMeal(payload) : null;
 
-  if (meal === undefined) {
-    return null; // still loading
-  }
-  if (meal === null) {
+  const [importedMealId, setImportedMealId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  if (!decoded) {
     return (
-      <Box>
-        <Typography variant="body2" color="text.secondary">
-          This meal no longer exists.
+      <Box sx={{ p: 3, textAlign: 'center', maxWidth: 420, mx: 'auto' }}>
+        <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+          🍽️ Home Plate
         </Typography>
-        <Button sx={{ mt: 2 }} onClick={() => navigate(ROUTES.library)}>
-          Back to Library
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          This link doesn't lead to a valid recipe — it may be broken, incomplete, or from a
+          newer version of the app.
+        </Typography>
+        <Button variant="contained" onClick={() => navigate(ROUTES.planner)}>
+          Open my Home Plate
         </Button>
       </Box>
     );
   }
 
+  const meal = decoded.meal;
   const isSplit = (ing: Ingredient) => meal.category === 'both' && ing.shared === false;
-
   const formatAmount = (amount: string, unit?: string, customUnit?: string) => {
     if (!amount) return '';
     const label = unit === 'other' ? customUnit ?? '' : unit ?? '';
     return label ? `${amount} ${label}` : amount;
   };
-
   const tags = [meal.effort, meal.size, ...meal.dietary].filter(Boolean).join(' · ');
-  const canStartCooking = meal.steps.length > 0;
 
-  const handleShare = async () => {
-    const result = await shareMeal(meal);
-    if (result === 'copied') setCopiedOpen(true);
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const id = await importSharedMeal(decoded);
+      setImportedMealId(id);
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
-    <Box sx={{ mx: -2, mt: -2 }}>
+    <Box>
       <Stack
         direction="row"
         alignItems="center"
-        sx={{ px: 1, py: 1, borderBottom: 1, borderColor: 'divider' }}
+        justifyContent="space-between"
+        sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider' }}
       >
-        <IconButton onClick={() => navigate(ROUTES.library)} aria-label="Back to Library">
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="subtitle1" fontWeight={700} sx={{ flex: 1 }} noWrap>
-          {meal.name || 'Meal Detail'}
+        <Typography variant="subtitle1" fontWeight={700}>
+          🍽️ Home Plate
         </Typography>
-        <IconButton onClick={() => void handleShare()} aria-label="Share meal">
-          <ShareOutlinedIcon fontSize="small" />
-        </IconButton>
-        <IconButton onClick={() => navigate(editMealPath(meal.id))} aria-label="Edit meal">
-          <EditOutlinedIcon fontSize="small" />
-        </IconButton>
+        <Button size="small" onClick={() => navigate(ROUTES.planner)}>
+          Open my Home Plate →
+        </Button>
       </Stack>
 
       {meal.photo ? (
@@ -86,7 +88,7 @@ export function MealDetailPage() {
           component="img"
           src={meal.photo}
           alt={meal.name}
-          sx={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}
+          sx={{ width: '100%', height: 180, objectFit: 'cover', display: 'block' }}
         />
       ) : (
         <Box
@@ -94,21 +96,20 @@ export function MealDetailPage() {
             height: 120,
             bgcolor: 'action.hover',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 0.5,
           }}
         >
           <RestaurantIcon sx={{ color: 'text.disabled' }} />
-          <Typography variant="caption" color="text.disabled">
-            No photo yet
-          </Typography>
         </Box>
       )}
 
-      <Box sx={{ p: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+      <Box sx={{ p: 2, maxWidth: 480, mx: 'auto' }}>
+        <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+          {meal.name}
+        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+          <Chip size="small" label={meal.mealType} />
           {meal.mealType === 'dinner' && (
             <Chip
               size="small"
@@ -120,9 +121,7 @@ export function MealDetailPage() {
               }}
             />
           )}
-          {meal.isQuickAdd && <Chip size="small" color="secondary" label="quick add" />}
         </Stack>
-
         {tags && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {tags}
@@ -214,29 +213,31 @@ export function MealDetailPage() {
 
         <Divider sx={{ my: 1 }} />
 
-        <Button
-          fullWidth
-          variant="contained"
-          size="large"
-          startIcon={<PlayArrowIcon />}
-          disabled={!canStartCooking}
-          onClick={() => navigate(cookingModePath(meal.id))}
-          sx={{ mt: 1 }}
-        >
-          {canStartCooking ? 'Start Cooking' : 'Add steps to enable cooking mode'}
-        </Button>
-        <Button fullWidth variant="outlined" size="large" sx={{ mt: 1 }} onClick={() => navigate(editMealPath(meal.id))}>
-          Edit Meal
-        </Button>
+        {importedMealId ? (
+          <Button
+            fullWidth
+            variant="contained"
+            size="large"
+            color="success"
+            startIcon={<CheckCircleOutlineIcon />}
+            onClick={() => navigate(mealDetailPath(importedMealId))}
+            sx={{ mt: 1 }}
+          >
+            Added — View in Library
+          </Button>
+        ) : (
+          <Button
+            fullWidth
+            variant="contained"
+            size="large"
+            disabled={importing}
+            onClick={() => void handleImport()}
+            sx={{ mt: 1 }}
+          >
+            {importing ? 'Adding…' : '+ Add to my Home Plate library'}
+          </Button>
+        )}
       </Box>
-
-      <Snackbar
-        open={copiedOpen}
-        autoHideDuration={2500}
-        onClose={() => setCopiedOpen(false)}
-        message="Link copied!"
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      />
     </Box>
   );
 }
